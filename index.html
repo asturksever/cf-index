@@ -19,7 +19,7 @@
     <div id="top-scrim" aria-hidden="true"></div>
 
     <header id="banner">
-      <h1>☕ The Coffee–Fried Chicken Index 🍗</h1>
+      <h1>☕ The Coffee–Fried Chicken Index 🐔</h1>
     </header>
 
     <!-- Postcode search -->
@@ -55,28 +55,24 @@
       <h2 id="legend-title">The index</h2>
       <div id="legend-bar" aria-hidden="true"></div>
       <div id="legend-labels" aria-hidden="true">
-        <span>🍗 −1</span><span>0</span><span>+1 ☕</span>
+        <span>🐔 −1</span><span>0</span><span>+1 ☕</span>
       </div>
-      <p id="legend-note">
-        score = (coffee − chicken) / (coffee + chicken), smoothed over neighbouring hexes.
-        Grey gaps = fewer than two shops nearby.
-      </p>
     </aside>
 
     <!-- Layer toggles -->
     <aside id="layers" aria-label="Map layers">
       <h2>Layers</h2>
       <label class="toggle">
-        <input type="checkbox" id="toggle-hexes" checked />
-        <span>Index hexes</span>
-      </label>
-      <label class="toggle sub">
         <input type="radio" name="hex-mode" id="mode-index" checked />
-        <span>colour: index</span>
+        <span>The Index</span>
       </label>
-      <label class="toggle sub">
+      <label class="toggle">
         <input type="radio" name="hex-mode" id="mode-apprec" />
-        <span>colour: price growth</span>
+        <span>Price Growth</span>
+      </label>
+      <label class="toggle">
+        <input type="radio" name="hex-mode" id="mode-value" />
+        <span>Value Spots</span>
       </label>
       <label class="toggle">
         <input type="checkbox" id="toggle-heat-coffee" />
@@ -84,15 +80,7 @@
       </label>
       <label class="toggle">
         <input type="checkbox" id="toggle-heat-chicken" />
-        <span>🍗 Chicken density</span>
-      </label>
-      <label class="toggle">
-        <input type="checkbox" id="toggle-buildings" />
-        <span>3D buildings</span>
-      </label>
-      <label class="toggle">
-        <input type="checkbox" id="toggle-satellite" />
-        <span>Satellite imagery</span>
+        <span>🐔 Chicken density</span>
       </label>
     </aside>
 

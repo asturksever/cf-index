@@ -6,6 +6,15 @@ import { sparkline } from './sparkline.js';
 
 const RES = 9;
 
+/** Plain-English reading of the value score (coffee standing minus price standing). */
+function valueVerdict(v) {
+  if (v >= 0.45) return 'a lot of coffee for the money';
+  if (v >= 0.2) return 'decent value for its coffee scene';
+  if (v > -0.2) return 'about what you would expect for the price';
+  if (v > -0.45) return 'paying a premium over the local coffee scene';
+  return 'you are paying for something other than the coffee';
+}
+
 export function initSearch(map, hexProps, districts) {
   const form = document.getElementById('search');
   const input = document.getElementById('pc-input');
@@ -99,10 +108,13 @@ export function initSearch(map, hexProps, districts) {
     verdict.style.color = v.color;
     meterDot.parentElement.hidden = false;
     meterDot.style.left = `${((p.score + 1) / 2) * 100}%`;
-    detail.textContent = `Nearby: ☕ ${p.cs} coffee shops · 🍗 ${p.fs} chicken shops (smoothed counts)`;
+    detail.textContent = `Nearby: ☕ ${p.cs} coffee shops · 🐔 ${p.fs} chicken shops (smoothed counts)`;
     price.textContent = p.price
       ? `Median sale price around here: ${formatPrice(p.price)} (${p.n} sales, 2023–now)`
       : 'Too few recent sales nearby for a reliable median price.';
+    if (p.value != null) {
+      price.textContent += ` · ${valueVerdict(p.value)}`;
+    }
     showHistory(data.outcode);
     result.hidden = false;
 

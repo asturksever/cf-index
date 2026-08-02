@@ -1,6 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { buildStyle, INDEX_FILL, APPREC_FILL } from './basemap-style.js';
+import { buildStyle, INDEX_FILL, APPREC_FILL, VALUE_FILL } from './basemap-style.js';
 import { initSearch } from './search.js';
 import { initScatter } from './scatter.js';
 import { verdictFor, formatPrice, ordinal } from './verdict.js';
@@ -64,11 +64,8 @@ map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-lef
 
 // --- Layer toggles ---
 const LAYER_TOGGLES = [
-  { input: 'toggle-hexes', layers: ['hex-fill', 'hex-outline'] },
   { input: 'toggle-heat-coffee', layers: ['heat-coffee'] },
   { input: 'toggle-heat-chicken', layers: ['heat-chicken'] },
-  { input: 'toggle-buildings', layers: ['building-3d'] },
-  { input: 'toggle-satellite', layers: ['satellite'] },
 ];
 for (const { input, layers } of LAYER_TOGGLES) {
   const checkbox = document.getElementById(input);
@@ -86,36 +83,29 @@ for (const { input, layers } of LAYER_TOGGLES) {
 const legendTitle = document.getElementById('legend-title');
 const legendLabels = document.getElementById('legend-labels');
 const legendEl = document.getElementById('legend');
-const LEGEND_TEXT = {
-  index: {
-    title: 'The index',
-    labels: ['🍗 −1', '0', '+1 ☕'],
-    note: 'score = (coffee − chicken) / (coffee + chicken), smoothed over neighbouring hexes. Grey gaps = fewer than two shops nearby.',
-  },
-  apprec: {
-    title: 'Price growth',
-    labels: ['1.35×', '1.9×', '2.4×+'],
-    note: `How many times over the median sale price has multiplied since ${summary.apprec.y0}, for the hex's postcode district. Grey = too few sales to measure.`,
-  },
+const MODES = {
+  index: { title: 'The index', labels: ['🐔 −1', '0', '+1 ☕'], fill: INDEX_FILL },
+  apprec: { title: 'Price growth', labels: ['1.35×', '1.9×', '2.4×+'], fill: APPREC_FILL },
+  value: { title: 'Value spots', labels: ['low', '', 'best value'], fill: VALUE_FILL },
 };
 
 function applyHexMode() {
-  const mode = document.getElementById('mode-apprec').checked ? 'apprec' : 'index';
+  const mode = ['apprec', 'value'].find((m) => document.getElementById(`mode-${m}`).checked)
+    ?? 'index';
   if (map.getLayer('hex-fill')) {
-    map.setPaintProperty('hex-fill', 'fill-color', mode === 'apprec' ? APPREC_FILL : INDEX_FILL);
+    map.setPaintProperty('hex-fill', 'fill-color', MODES[mode].fill);
   }
-  legendEl.classList.toggle('apprec', mode === 'apprec');
-  legendTitle.textContent = LEGEND_TEXT[mode].title;
-  document.getElementById('legend-note').textContent = LEGEND_TEXT[mode].note;
+  for (const m of Object.keys(MODES)) legendEl.classList.toggle(m, m === mode);
+  legendTitle.textContent = MODES[mode].title;
   legendLabels.replaceChildren(
-    ...LEGEND_TEXT[mode].labels.map((t) => {
+    ...MODES[mode].labels.map((t) => {
       const span = document.createElement('span');
       span.textContent = t;
       return span;
     }),
   );
 }
-for (const id of ['mode-index', 'mode-apprec']) {
+for (const id of ['mode-index', 'mode-apprec', 'mode-value']) {
   document.getElementById(id).addEventListener('change', applyHexMode);
 }
 map.on('load', applyHexMode);
@@ -161,12 +151,14 @@ function updateInfoCard(point) {
   infoScore.textContent = `${p.score > 0 ? '+' : ''}${p.score.toFixed(2)}`;
   infoScore.style.color = v.color;
   infoVerdict.textContent = `${v.label} · ${ordinal(p.pct)} percentile`;
-  infoCounts.textContent = `☕ ${p.c} in hex (${p.cs} nearby) · 🍗 ${p.f} in hex (${p.fs} nearby)`;
+  infoCounts.textContent = `☕ ${p.c} in hex (${p.cs} nearby) · 🐔 ${p.f} in hex (${p.fs} nearby)`;
   infoPrice.textContent = p.price
     ? `median sale ${formatPrice(p.price)} (${p.n} sales)`
     : 'too few recent sales for a median';
-  infoGrowth.textContent =
-    p.outcode && p.apprec ? `${p.outcode}: ${p.apprec}× since ${summary.apprec.y0}` : '';
+  const bits = [];
+  if (p.outcode && p.apprec) bits.push(`${p.outcode}: ${p.apprec}× since ${summary.apprec.y0}`);
+  if (p.value != null) bits.push(`value ${p.value > 0 ? '+' : ''}${p.value.toFixed(2)}`);
+  infoGrowth.textContent = bits.join(' · ');
   info.hidden = false; // unhide before measuring, so the card has a layout box
   positionInfoCard(point);
   map.getCanvas().style.cursor = 'crosshair';

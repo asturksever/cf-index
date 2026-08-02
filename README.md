@@ -18,8 +18,26 @@ Current build: **Spearman ρ ≈ 0.38** between hex score and median sale price
 (~8.3k hexes). Correlation, not causation.
 
 Also on the map: **coffee and fried-chicken density heatmaps** as separate
-layers, and a **price-growth colouring mode** — every hex tinted by how much
-its postcode district's median sale price has multiplied since 2011.
+layers, a **price-growth mode** tinting each hex by how much its postcode
+district's median sale price has multiplied since 2011, and a **value-spots
+mode**.
+
+### Value spots
+
+A modern rerun of [Londonist's 2015 coffee-and-chicken
+method](https://londonist.com/2015/10/decide-where-to-live-in-london-using-the-coffee-and-chicken-method):
+find the places where the coffee-to-chicken mix already looks gentrified but
+prices have not caught up. Both terms are percentile ranks, so one £2M sale
+cannot swamp a hex:
+
+```
+value = rank(index score) − rank(median price)      # −1 … +1
+```
+
++1 means a hex's coffee standing runs as far ahead of its price standing as
+London allows. Best-value districts in the current build: RM3, TN16, DA14,
+E16, DA5, TW14, SE28, RM8. Chelsea scores a perfect +1.00 on the index and
+still comes out neutral here, because you are paying for it.
 
 ### Why 2011 and not 2016
 

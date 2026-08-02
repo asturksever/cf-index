@@ -158,6 +158,25 @@ def main() -> None:
             r["outcode"] = None
             r["apprec"] = None
 
+    # "Value spots" — the Londonist coffee-and-chicken method: places where the
+    # coffee-to-chicken mix already looks gentrified but prices have not caught
+    # up. Both terms are percentile ranks so a £2M outlier cannot swamp the
+    # index, and value = rank(score) - rank(price), i.e. how far a hex's coffee
+    # standing runs ahead of what its prices imply. +1 = best-value.
+    priced = [(c, r) for c, r in scored.items() if r["price"]]
+    if priced:
+        s_rank = stats.rankdata([r["score"] for _, r in priced], method="average")
+        p_rank = stats.rankdata([r["price"] for _, r in priced], method="average")
+        n = len(priced)
+        denom = max(n - 1, 1)
+        for (cell, r), sr, pr in zip(priced, s_rank, p_rank):
+            r["value"] = round(float((sr - pr) / denom), 3)
+        vvals = np.array([r["value"] for _, r in priced])
+        print(
+            "value quantiles:",
+            {q: round(float(np.percentile(vvals, q)), 2) for q in (5, 25, 50, 75, 95)},
+        )
+
     # correlation: score vs current price, per hex
     qual = [(r["score"], r["price"]) for r in scored.values() if r["price"]]
     xs = np.array([q[0] for q in qual])
@@ -218,6 +237,22 @@ def main() -> None:
         "apprec quantiles:",
         {q: round(float(np.percentile(apprecs, q)), 2) for q in (5, 25, 50, 75, 95)},
     )
+
+    # best-value districts: mean hex value, restricted to districts with enough
+    # hexes that one cheap outlier cannot carry the whole postcode
+    dist_value = defaultdict(list)
+    for r in scored.values():
+        if r["outcode"] and r.get("value") is not None:
+            dist_value[r["outcode"]].append(r["value"])
+    top_value = sorted(
+        (
+            {"outcode": oc, "value": round(float(np.mean(v)), 3), "n": len(v)}
+            for oc, v in dist_value.items()
+            if len(v) >= 5
+        ),
+        key=lambda d: -d["value"],
+    )[:10]
+    print("top value districts:", ", ".join(f"{d['outcode']} {d['value']:+.2f}" for d in top_value))
 
     # scatter sample (deterministic)
     rng = np.random.default_rng(42)
@@ -291,6 +326,7 @@ def main() -> None:
             "n_districts": g15["n"],
             "london_mult15": districts.get("_london", {}).get("mult15"),
         },
+        "top_value": top_value,
         "scatter": scatter,
     }
     OUT_SUMMARY.write_text(json.dumps(summary, separators=(",", ":")))

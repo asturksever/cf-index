@@ -51,6 +51,27 @@ export const APPREC_FILL = [
   ],
 ];
 
+// Value spots — the Londonist coffee-and-chicken method. Only the top of the
+// range gets colour: the question is "where is this a bargain", so mid and
+// negative values stay near-neutral rather than competing for attention.
+// Stops follow the observed spread (5th-95th pct: -0.48 to +0.61).
+export const VALUE_FILL = [
+  'case',
+  ['!', ['has', 'value']],
+  'rgba(51, 48, 43, 0.08)',
+  [
+    'interpolate',
+    ['linear'],
+    ['get', 'value'],
+    -0.5, '#FBFAF7',
+    0, '#F0EAF6',
+    0.25, '#D5C2E8',
+    0.45, '#A87FD1',
+    0.65, '#7038B0',
+    0.85, '#3F1D6B',
+  ],
+];
+
 /**
  * @param {object} hexData parsed GeoJSON FeatureCollection of index hexes
  * @param {object} poiData parsed GeoJSON FeatureCollection of raw POI points
@@ -64,15 +85,6 @@ export function buildStyle(hexData, poiData) {
       openfreemap: {
         type: 'vector',
         url: 'https://tiles.openfreemap.org/planet',
-      },
-      satellite: {
-        type: 'raster',
-        tiles: [
-          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        ],
-        tileSize: 256,
-        maxzoom: 19,
-        attribution: 'Imagery: Esri, Maxar, Earthstar Geographics',
       },
       hexes: {
         type: 'geojson',
@@ -146,17 +158,6 @@ export function buildStyle(hexData, poiData) {
           'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 5, 0.6, 10, 1.4, 14, 5, 18, 20],
         },
       },
-      // --- satellite imagery (toggled from the UI) ---
-      {
-        id: 'satellite',
-        type: 'raster',
-        source: 'satellite',
-        layout: { visibility: 'none' },
-        paint: {
-          'raster-brightness-max': 0.95,
-          'raster-saturation': -0.2,
-        },
-      },
       // --- the index (the data!) ---
       {
         id: 'hex-fill',
@@ -175,27 +176,6 @@ export function buildStyle(hexData, poiData) {
         paint: {
           'line-color': 'rgba(51, 48, 43, 0.14)',
           'line-width': 0.75,
-        },
-      },
-      // --- 3D buildings (toggled, off by default) ---
-      {
-        id: 'building-3d',
-        type: 'fill-extrusion',
-        source: 'openfreemap',
-        'source-layer': 'building',
-        minzoom: 13.5,
-        layout: { visibility: 'none' },
-        paint: {
-          'fill-extrusion-color': [
-            'interpolate',
-            ['linear'],
-            ['coalesce', ['get', 'render_height'], 5],
-            0, COLORS.building,
-            60, COLORS.buildingTop,
-          ],
-          'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 5],
-          'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-          'fill-extrusion-opacity': 0.9,
         },
       },
       // --- raw POI density (toggled, off by default) ---

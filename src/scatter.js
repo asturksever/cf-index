@@ -56,7 +56,7 @@ export function initScatter(summary) {
     svg += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${H - PAD.b}" stroke="#e5decf" stroke-width="${t === 0 ? 1.5 : 1}"/>`;
     svg += `<text x="${x}" y="${H - PAD.b + 12}" text-anchor="middle" font-size="9" fill="#8a8577">${t > 0 ? '+' + t : t}</text>`;
   }
-  svg += `<text x="${xTo(-1)}" y="${H - 2}" text-anchor="start" font-size="9" fill="#C2410C">🍗 chicken</text>`;
+  svg += `<text x="${xTo(-1)}" y="${H - 2}" text-anchor="start" font-size="9" fill="#C2410C">🐔 chicken</text>`;
   svg += `<text x="${xTo(1)}" y="${H - 2}" text-anchor="end" font-size="9" fill="#084C61">coffee ☕</text>`;
   for (const [x, y] of pts) {
     svg += `<circle cx="${xTo(x).toFixed(1)}" cy="${yTo(y).toFixed(1)}" r="1.6" fill="#23859C" fill-opacity="0.25"/>`;
