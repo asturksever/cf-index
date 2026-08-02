@@ -105,8 +105,11 @@ def clip_and_dedupe(df: pd.DataFrame) -> pd.DataFrame:
     )
     cell = [h3.latlng_to_cell(la, lo, 11) for la, lo in zip(df["lat"], df["lon"])]
     df = df.assign(_norm=norm, _cell=cell)
+    # stable sort + id tiebreak: quicksort would keep a different one of two
+    # equal-confidence duplicates on each run, moving a handful of POIs between
+    # hexes and making the build unreproducible
     df = (
-        df.sort_values("confidence", ascending=False)
+        df.sort_values(["confidence", "id"], ascending=[False, True], kind="stable")
         .drop_duplicates(subset=["_norm", "_cell"], keep="first")
         .drop(columns=["_norm", "_cell"])
     )

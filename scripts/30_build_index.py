@@ -88,7 +88,9 @@ def build_districts(this_year: int) -> dict:
 def main() -> None:
     this_year = date.today().year
     boundary = json.loads(BOUNDARY.read_text())
-    cells = set(h3.h3shape_to_cells(h3.geo_to_h3shape(boundary), RES))
+    # sorted, not a raw set: keeps feature order (and therefore the committed
+    # GeoJSON) byte-identical across runs when the inputs have not changed
+    cells = sorted(set(h3.h3shape_to_cells(h3.geo_to_h3shape(boundary), RES)))
     print(f"grid: {len(cells):,} res-{RES} cells")
 
     pois = pd.read_parquet(POIS)
@@ -118,8 +120,12 @@ def main() -> None:
 
     scored = {c: r for c, r in rows.items() if r["score"] is not None}
     svals = np.array([r["score"] for r in scored.values()])
-    order = svals.argsort().argsort()  # rank
-    for (cell, r), rank in zip(scored.items(), order):
+    # Average ranks for ties. argsort().argsort() would hand equal scores
+    # arbitrary distinct ranks, and since the cell set iterates in a different
+    # order every process, the same hex would report a different percentile on
+    # each build — scores bunch hard near +1, so that hit thousands of hexes.
+    ranks = stats.rankdata(svals, method="average") - 1
+    for (cell, r), rank in zip(scored.items(), ranks):
         r["pct"] = int(round(100 * rank / max(len(svals) - 1, 1)))
 
     # prices + outcode: sales per cell, pooled over immediate neighbours

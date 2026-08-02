@@ -92,7 +92,10 @@ export function initSearch(map, hexProps, districts) {
 
     const v = verdictFor(p.score);
     title.textContent = `${data.postcode} · ${admin_district ?? ''}`;
-    verdict.textContent = `${v.label} — ${p.score > 0 ? '+' : ''}${p.score.toFixed(2)}, more coffee-leaning than ${p.pct}% of London`;
+    // "Nth percentile" rather than "more coffee-leaning than N%": a quarter of
+    // London ties at the maximum score, so a strict "more than" claim would
+    // overstate what the shared rank actually means.
+    verdict.textContent = `${v.label} — ${p.score > 0 ? '+' : ''}${p.score.toFixed(2)}, ${ordinal(p.pct)} percentile London-wide`;
     verdict.style.color = v.color;
     meterDot.parentElement.hidden = false;
     meterDot.style.left = `${((p.score + 1) / 2) * 100}%`;
