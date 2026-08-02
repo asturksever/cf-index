@@ -33,7 +33,8 @@ const map = new maplibregl.Map({
 map.once('load', () => map.resize());
 new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
 
-map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+// No NavigationControl: scroll/pinch to zoom and right-drag to rotate keep the
+// map clean of chrome.
 map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
 // MapLibre re-adds 'maplibregl-compact-show' during load (resize event triggers

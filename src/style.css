@@ -274,7 +274,7 @@ body {
 /* --- Layer toggles --- */
 #layers {
   position: absolute;
-  top: 118px;
+  bottom: 52px;
   right: 14px;
   z-index: 10;
   background: var(--card);
@@ -487,9 +487,6 @@ body {
     font-size: 10px;
   }
   #layers {
-    /* top-right would sit under the postcode result card on a phone */
-    top: auto;
-    bottom: 52px;
     padding: 8px 10px;
     max-width: 190px;
   }
