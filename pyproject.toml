@@ -1,0 +1,23 @@
+[project]
+name = "cf-index-pipeline"
+version = "1.0.0"
+description = "Data pipeline for the Coffee-Fried Chicken Index of London"
+requires-python = ">=3.11"
+dependencies = [
+  "duckdb>=1.1",
+  "h3>=4.0",
+  "numpy>=1.26",
+  "pandas>=2.0",
+  "pyarrow>=17",
+  "pyproj>=3.6",
+  "requests>=2.31",
+  "scipy>=1.11",
+  "shapely>=2.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = []

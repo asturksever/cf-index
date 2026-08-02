@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Coffee–Fried Chicken Index — London</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <!-- Top scrim keeps the header readable over map labels -->
+    <div id="top-scrim" aria-hidden="true"></div>
+
+    <header id="banner">
+      <h1>☕ The Coffee–Fried Chicken Index 🍗</h1>
+      <p id="subtitle">
+        Every London hex scored from −1 (all fried chicken) to +1 (all coffee) — and what that
+        says about house prices
+      </p>
+    </header>
+
+    <!-- Postcode search -->
+    <form id="search" role="search" aria-label="Postcode lookup">
+      <input
+        id="pc-input"
+        type="text"
+        placeholder="Your postcode, e.g. E8 3PN"
+        autocomplete="postal-code"
+        spellcheck="false"
+      />
+      <button type="submit">Check my area</button>
+    </form>
+
+    <!-- Result card for postcode lookups -->
+    <div id="result" hidden>
+      <button id="result-close" aria-label="Close">✕</button>
+      <div id="result-title"></div>
+      <div id="result-verdict"></div>
+      <div id="result-meter" aria-hidden="true">
+        <div id="result-meter-dot"></div>
+      </div>
+      <div id="result-detail"></div>
+      <div id="result-price"></div>
+    </div>
+
+    <!-- Legend -->
+    <aside id="legend" aria-label="Index legend">
+      <h2>The index</h2>
+      <div id="legend-bar" aria-hidden="true"></div>
+      <div id="legend-labels" aria-hidden="true">
+        <span>🍗 −1</span><span>0</span><span>+1 ☕</span>
+      </div>
+      <p id="legend-note">
+        score = (coffee − chicken) / (coffee + chicken), smoothed over neighbouring hexes.
+        Grey gaps = fewer than two shops nearby.
+      </p>
+    </aside>
+
+    <!-- Layer toggles -->
+    <aside id="layers" aria-label="Map layers">
+      <h2>Layers</h2>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-hexes" checked />
+        <span>Index hexes</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-buildings" />
+        <span>3D buildings</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-satellite" />
+        <span>Satellite imagery</span>
+      </label>
+    </aside>
+
+    <!-- Correlation panel -->
+    <details id="corr" open>
+      <summary>Index × house prices</summary>
+      <div id="corr-body">
+        <div id="corr-stats"></div>
+        <div id="corr-chart"></div>
+        <p id="corr-blurb">
+          Cafés are a leading indicator of gentrification — a new coffee shop predicts rising
+          local house prices (<a
+            href="https://www.aeaweb.org/articles?id=10.1257%2Fpandp.20181034"
+            target="_blank"
+            rel="noopener"
+            >Glaeser, Kim &amp; Luca 2018</a
+          >), while takeaway density tracks deprivation (<a
+            href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4415115/"
+            target="_blank"
+            rel="noopener"
+            >Maguire et&nbsp;al. 2015</a
+          >). Correlation, not causation — and hexes are areas, not people.
+        </p>
+      </div>
+    </details>
+
+    <!-- Hover info card -->
+    <div id="info" hidden>
+      <div id="info-score"></div>
+      <div id="info-verdict"></div>
+      <div id="info-counts"></div>
+      <div id="info-price"></div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

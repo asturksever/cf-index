@@ -1,0 +1,15 @@
+# big raw downloads (Price Paid CSVs, Code-Point zip) — never committed
+data/raw/pp-*.csv
+data/raw/codepo_*
+data/build/
+
+# committed caches are the exceptions
+!data/raw/overture_pois.parquet
+!data/raw/london_boundary.geojson
+
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.egg-info/
+.DS_Store

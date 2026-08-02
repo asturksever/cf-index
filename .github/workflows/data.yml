@@ -1,0 +1,63 @@
+name: Rebuild index data
+
+# Monthly refresh: Price Paid data updates ~20th of each month; Overture
+# releases monthly. Committing public/data retriggers the Pages deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      refresh_pois:
+        description: Re-download POIs from Overture S3 (else use committed cache)
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 6 2 * *'
+
+permissions:
+  contents: write
+
+jobs:
+  build-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install .
+
+      - name: Cache raw price downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/raw/pp-*.csv
+            data/raw/codepo_gb.zip
+            data/raw/codepo_gb
+          # past-year PPD files are effectively immutable; current year changes monthly
+          key: prices-${{ github.run_id }}
+          restore-keys: prices-
+
+      - name: Run pipeline
+        run: |
+          python scripts/15_fetch_boundary.py
+          if [ "${{ inputs.refresh_pois }}" = "true" ]; then
+            python scripts/10_fetch_pois.py --refresh
+          else
+            python scripts/10_fetch_pois.py
+          fi
+          ./scripts/20_fetch_prices.sh
+          python scripts/25_prices_to_points.py
+          python scripts/30_build_index.py
+
+      - name: Commit rebuilt data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/data data/raw/overture_pois.parquet data/raw/london_boundary.geojson
+          if git diff --cached --quiet; then
+            echo "no data changes"
+          else
+            git commit -m "Data refresh: $(date -u +%Y-%m-%d)"
+            git push
+          fi
