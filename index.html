@@ -59,9 +59,7 @@
       </div>
     </aside>
 
-    <!-- Right-hand column: layers on top, the correlation panel beneath it -->
-    <div id="right-stack">
-      <aside id="layers" aria-label="Map layers">
+    <aside id="layers" aria-label="Map layers">
         <h2>Layers</h2>
       <label class="toggle">
         <input type="radio" name="hex-mode" id="mode-index" checked />
@@ -83,32 +81,52 @@
         <input type="checkbox" id="toggle-heat-chicken" />
         <span>🐔 Chicken density</span>
       </label>
-      </aside>
+    </aside>
 
-      <details id="corr" open>
-        <summary>Index × house prices</summary>
+    <!-- Upper-left explainer: what the map is, then the headline result -->
+    <details id="corr" open>
+      <summary>What am I looking at?</summary>
       <div id="corr-body">
+        <p id="corr-intro">
+          Each hexagon is ~0.1&nbsp;km² of London, scored by the coffee and fried-chicken
+          shops a few minutes' walk away: <strong>+1 all coffee</strong>,
+          <strong>−1 all chicken</strong>. The other layers recolour the same hexagons by
+          price growth, or by where coffee runs ahead of price.
+        </p>
         <div id="corr-stats"></div>
         <div id="corr-chart"></div>
-        <p id="corr-blurb">
-          Cafés track affluence and takeaway density tracks deprivation (<a
+        <p id="corr-sources">
+          <strong>Sources.</strong> Shops
+          <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a>,
+          prices
+          <a
+            href="https://www.gov.uk/government/collections/price-paid-data"
+            target="_blank"
+            rel="noopener"
+            >HM Land Registry</a
+          >
+          2011–now. Method after
+          <a
+            href="https://londonist.com/2015/10/decide-where-to-live-in-london-using-the-coffee-and-chicken-method"
+            target="_blank"
+            rel="noopener"
+            >Londonist&nbsp;2015</a
+          >; see also
+          <a
             href="https://www.aeaweb.org/articles?id=10.1257%2Fpandp.20181034"
             target="_blank"
             rel="noopener"
-            >Glaeser, Kim &amp; Luca 2018</a
-          >; <a
+            >Glaeser&nbsp;2018</a
+          >,
+          <a
             href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4415115/"
             target="_blank"
             rel="noopener"
-            >Maguire et&nbsp;al. 2015</a
-          >) — which is what the level correlation shows. The growth result is the
-          2010s London story: prime districts stalled while Dagenham, Leyton and Abbey
-          Wood caught up from a low base. Correlation, not causation — and hexes are
-          areas, not people.
+            >Maguire&nbsp;2015</a
+          >. Correlation, not causation.
         </p>
       </div>
-      </details>
-    </div>
+    </details>
 
     <!-- Hover info card -->
     <div id="info" hidden>

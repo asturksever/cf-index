@@ -2,18 +2,20 @@
 // correlation numbers, rendered from summary.json.
 
 const W = 300;
-const H = 190;
-const PAD = { l: 44, r: 8, t: 8, b: 26 };
+const H = 150; // short enough that the sources below stay above the fold
+const PAD = { l: 44, r: 8, t: 6, b: 24 };
 
 export function initScatter(summary) {
   const stats = document.getElementById('corr-stats');
   const chart = document.getElementById('corr-chart');
 
   const a = summary.apprec;
+  const p = (v) => (v > 0.01 ? v.toFixed(2) : v.toExponential(0));
+
+  // Two findings, one line each — the panel is an orientation aid, not a paper.
   stats.innerHTML =
-    `<strong>Spearman ρ = ${summary.spearman_rho.toFixed(2)}</strong> · ` +
-    `Pearson r = ${summary.pearson_log_r.toFixed(2)} (log price) · ` +
-    `${summary.corr_n.toLocaleString()} hexes`;
+    `<strong>Coffee costs more.</strong> Coffee-leaning hexes sell higher ` +
+    `(ρ = ${summary.spearman_rho.toFixed(2)} across ${summary.corr_n.toLocaleString()} hexes).`;
 
   if (a?.rho15 != null) {
     const growth = document.createElement('div');
@@ -22,10 +24,10 @@ export function initScatter(summary) {
       `Same test on a ${a.y0_short} baseline: ρ = ${a.rho10?.toFixed(2)} raw, ` +
       `${a.partial10 >= 0 ? '+' : ''}${a.partial10?.toFixed(2)} net of price level — same story on both windows.`;
     growth.innerHTML =
-      `<strong>Price growth is a different story.</strong> Districts that lean coffee grew ` +
-      `<em>slower</em> since ${a.y0} (ρ = ${a.rho15.toFixed(2)}, ${a.n_districts} districts) — but that is ` +
-      `mean reversion, not the coffee. Hold the ${a.y0} price level fixed and the index predicts ` +
-      `growth not at all (ρ = ${a.partial15 >= 0 ? '+' : ''}${a.partial15.toFixed(2)}, p = ${a.partial15_p > 0.01 ? a.partial15_p.toFixed(2) : a.partial15_p.toExponential(0)}).`;
+      `<strong>But it does not predict growth.</strong> Coffee districts actually rose ` +
+      `<em>slower</em> since ${a.y0} — cheap areas simply multiply faster from a low base. ` +
+      `Hold the ${a.y0} price fixed and the index tells you nothing about growth ` +
+      `(ρ = ${a.partial15 >= 0 ? '+' : ''}${a.partial15.toFixed(2)}, p = ${p(a.partial15_p)}).`;
     stats.after(growth);
   }
 

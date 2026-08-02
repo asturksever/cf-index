@@ -271,27 +271,12 @@ body {
 }
 
 
-/* --- Right-hand column: layers, then the correlation panel beneath it --- */
-#right-stack {
+/* --- Layer toggles --- */
+#layers {
   position: absolute;
   top: 118px;
   right: 14px;
-  bottom: 52px;
   z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-  /* the column spans the full height, so let clicks through the empty gap */
-  pointer-events: none;
-}
-
-#right-stack > * {
-  pointer-events: auto;
-}
-
-#layers {
-  flex: none;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -326,11 +311,14 @@ body {
 
 /* --- Correlation panel --- */
 #corr {
+  position: absolute;
+  top: 64px;
+  left: 14px;
+  z-index: 10;
   width: 320px;
-  /* Take whatever height is left under the layers panel and scroll inside it,
-     so the column never runs off the bottom of a short viewport. */
-  flex: 0 1 auto;
-  min-height: 0;
+  /* Stop just short of the legend in the bottom-left corner and scroll
+     internally rather than running off a short viewport. */
+  max-height: calc(100vh - 196px);
   overflow-y: auto;
   background: var(--card);
   border: 1px solid var(--border);
@@ -346,16 +334,24 @@ body {
   user-select: none;
 }
 
+#corr-intro {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 8px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(51, 48, 43, 0.1);
+}
+
 #corr-stats {
   font-size: 12.5px;
-  margin: 8px 0 4px;
+  line-height: 1.45;
+  margin: 0 0 5px;
 }
 
 #corr-growth {
   font-size: 12.5px;
+  line-height: 1.45;
   margin: 0 0 6px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(51, 48, 43, 0.1);
   cursor: help;
 }
 
@@ -365,14 +361,16 @@ body {
   display: block;
 }
 
-#corr-blurb {
-  font-size: 11px;
+#corr-sources {
+  font-size: 10.5px;
   color: var(--muted);
   line-height: 1.45;
   margin: 8px 0 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(51, 48, 43, 0.1);
 }
 
-#corr-blurb a {
+#corr-sources a {
   color: var(--coffee);
 }
 
@@ -474,11 +472,6 @@ body {
   #corr {
     display: none;
   }
-  /* With the correlation panel hidden the column is just the layers card, so
-     let it sit on the bottom row rather than stretching from the header down. */
-  #right-stack {
-    top: auto;
-  }
   /* Legend and layers share the bottom row on a phone; both shrink so they
      sit side by side instead of overlapping. */
   #legend {
@@ -494,6 +487,9 @@ body {
     font-size: 10px;
   }
   #layers {
+    /* top-right would sit under the postcode result card on a phone */
+    top: auto;
+    bottom: 52px;
     padding: 8px 10px;
     max-width: 190px;
   }
