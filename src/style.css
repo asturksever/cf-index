@@ -334,6 +334,21 @@ body {
   user-select: none;
 }
 
+/* Collapsed it is just a label, so let it hug the text instead of holding the
+   full panel width open across the map. */
+#corr:not([open]) {
+  width: auto;
+}
+
+/* The centred search bar reaches the panel below ~1055px wide; drop the panel
+   under it rather than letting the two collide. */
+@media (max-width: 1080px) {
+  #corr {
+    top: 112px;
+    max-height: calc(100vh - 244px);
+  }
+}
+
 #corr-intro {
   font-size: 12.5px;
   line-height: 1.5;

@@ -12,21 +12,21 @@ export function initScatter(summary) {
   const a = summary.apprec;
   const p = (v) => (v > 0.01 ? v.toFixed(2) : v.toExponential(0));
 
-  // Two findings, one line each — the panel is an orientation aid, not a paper.
+  // One line per finding — the panel orients, it does not argue the case.
   stats.innerHTML =
-    `<strong>Coffee costs more.</strong> Coffee-leaning hexes sell higher ` +
-    `(ρ = ${summary.spearman_rho.toFixed(2)} across ${summary.corr_n.toLocaleString()} hexes).`;
+    `<strong>Coffee costs more.</strong> Coffee-leaning areas sell higher ` +
+    `(ρ = ${summary.spearman_rho.toFixed(2)}, ${summary.corr_n.toLocaleString()} hexes).`;
 
   if (a?.rho15 != null) {
     const growth = document.createElement('div');
     growth.id = 'corr-growth';
     growth.title =
-      `Same test on a ${a.y0_short} baseline: ρ = ${a.rho10?.toFixed(2)} raw, ` +
-      `${a.partial10 >= 0 ? '+' : ''}${a.partial10?.toFixed(2)} net of price level — same story on both windows.`;
+      `Raw correlation with ${a.y0}–now growth is ${a.rho15.toFixed(2)}, but cheap areas ` +
+      `multiply faster from a low base. Same story on a ${a.y0_short} baseline: ` +
+      `${a.rho10?.toFixed(2)} raw, ${a.partial10 >= 0 ? '+' : ''}${a.partial10?.toFixed(2)} net of price level.`;
     growth.innerHTML =
-      `<strong>But it does not predict growth.</strong> Coffee districts actually rose ` +
-      `<em>slower</em> since ${a.y0} — cheap areas simply multiply faster from a low base. ` +
-      `Hold the ${a.y0} price fixed and the index tells you nothing about growth ` +
+      `<strong>But it doesn't predict growth.</strong> Net of what an area cost in ` +
+      `${a.y0}, the index says nothing about what happened next ` +
       `(ρ = ${a.partial15 >= 0 ? '+' : ''}${a.partial15.toFixed(2)}, p = ${p(a.partial15_p)}).`;
     stats.after(growth);
   }
