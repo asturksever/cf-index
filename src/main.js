@@ -1,17 +1,19 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { buildStyle } from './basemap-style.js';
+import { buildStyle, INDEX_FILL, APPREC_FILL } from './basemap-style.js';
 import { initSearch } from './search.js';
 import { initScatter } from './scatter.js';
-import { verdictFor, formatPrice } from './verdict.js';
+import { verdictFor, formatPrice, ordinal } from './verdict.js';
 
 const DATA_BASE = `${import.meta.env.BASE_URL}data/`;
 
 const HOME = { center: [-0.118, 51.5074], zoom: 9.7 };
 
-const [hexData, summary] = await Promise.all([
+const [hexData, summary, poiData, districts] = await Promise.all([
   fetch(`${DATA_BASE}hexes.geojson`).then((r) => r.json()),
   fetch(`${DATA_BASE}summary.json`).then((r) => r.json()),
+  fetch(`${DATA_BASE}pois.geojson`).then((r) => r.json()),
+  fetch(`${DATA_BASE}districts.json`).then((r) => r.json()),
 ]);
 
 // h3 index -> feature properties, for the postcode lookup
@@ -19,7 +21,7 @@ const hexProps = new Map(hexData.features.map((f) => [f.properties.h3, f.propert
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: buildStyle(hexData),
+  style: buildStyle(hexData, poiData),
   ...HOME,
   hash: true,
   attributionControl: false,
@@ -63,6 +65,8 @@ map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-lef
 // --- Layer toggles ---
 const LAYER_TOGGLES = [
   { input: 'toggle-hexes', layers: ['hex-fill', 'hex-outline'] },
+  { input: 'toggle-heat-coffee', layers: ['heat-coffee'] },
+  { input: 'toggle-heat-chicken', layers: ['heat-chicken'] },
   { input: 'toggle-buildings', layers: ['building-3d'] },
   { input: 'toggle-satellite', layers: ['satellite'] },
 ];
@@ -78,12 +82,51 @@ for (const { input, layers } of LAYER_TOGGLES) {
   map.on('load', apply);
 }
 
+// --- Hex colouring mode: index score vs district price growth ---
+const legendTitle = document.getElementById('legend-title');
+const legendLabels = document.getElementById('legend-labels');
+const legendEl = document.getElementById('legend');
+const LEGEND_TEXT = {
+  index: {
+    title: 'The index',
+    labels: ['🍗 −1', '0', '+1 ☕'],
+    note: 'score = (coffee − chicken) / (coffee + chicken), smoothed over neighbouring hexes. Grey gaps = fewer than two shops nearby.',
+  },
+  apprec: {
+    title: 'Price growth',
+    labels: ['1.35×', '1.9×', '2.4×+'],
+    note: `How many times over the median sale price has multiplied since ${summary.apprec.y0}, for the hex's postcode district. Grey = too few sales to measure.`,
+  },
+};
+
+function applyHexMode() {
+  const mode = document.getElementById('mode-apprec').checked ? 'apprec' : 'index';
+  if (map.getLayer('hex-fill')) {
+    map.setPaintProperty('hex-fill', 'fill-color', mode === 'apprec' ? APPREC_FILL : INDEX_FILL);
+  }
+  legendEl.classList.toggle('apprec', mode === 'apprec');
+  legendTitle.textContent = LEGEND_TEXT[mode].title;
+  document.getElementById('legend-note').textContent = LEGEND_TEXT[mode].note;
+  legendLabels.replaceChildren(
+    ...LEGEND_TEXT[mode].labels.map((t) => {
+      const span = document.createElement('span');
+      span.textContent = t;
+      return span;
+    }),
+  );
+}
+for (const id of ['mode-index', 'mode-apprec']) {
+  document.getElementById(id).addEventListener('change', applyHexMode);
+}
+map.on('load', applyHexMode);
+
 // --- Hover info card ---
 const info = document.getElementById('info');
 const infoScore = document.getElementById('info-score');
 const infoVerdict = document.getElementById('info-verdict');
 const infoCounts = document.getElementById('info-counts');
 const infoPrice = document.getElementById('info-price');
+const infoGrowth = document.getElementById('info-growth');
 
 const INFO_GAP = 14;
 
@@ -122,15 +165,11 @@ function updateInfoCard(point) {
   infoPrice.textContent = p.price
     ? `median sale ${formatPrice(p.price)} (${p.n} sales)`
     : 'too few recent sales for a median';
+  infoGrowth.textContent =
+    p.outcode && p.apprec ? `${p.outcode}: ${p.apprec}× since ${summary.apprec.y0}` : '';
   info.hidden = false; // unhide before measuring, so the card has a layout box
   positionInfoCard(point);
   map.getCanvas().style.cursor = 'crosshair';
-}
-
-function ordinal(n) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
 // coalesce queryRenderedFeatures to one lookup per frame
@@ -154,7 +193,7 @@ map.on('mouseout', () => {
   map.getCanvas().style.cursor = '';
 });
 
-initSearch(map, hexProps);
+initSearch(map, hexProps, districts);
 initScatter(summary);
 
 map.on('error', (e) => console.warn('map error:', e.error?.message ?? e));

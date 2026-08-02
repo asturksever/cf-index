@@ -20,10 +20,6 @@
 
     <header id="banner">
       <h1>☕ The Coffee–Fried Chicken Index 🍗</h1>
-      <p id="subtitle">
-        Every London hex scored from −1 (all fried chicken) to +1 (all coffee) — and what that
-        says about house prices
-      </p>
     </header>
 
     <!-- Postcode search -->
@@ -48,11 +44,15 @@
       </div>
       <div id="result-detail"></div>
       <div id="result-price"></div>
+      <div id="result-history" hidden>
+        <div id="result-spark"></div>
+        <div id="result-history-note"></div>
+      </div>
     </div>
 
     <!-- Legend -->
     <aside id="legend" aria-label="Index legend">
-      <h2>The index</h2>
+      <h2 id="legend-title">The index</h2>
       <div id="legend-bar" aria-hidden="true"></div>
       <div id="legend-labels" aria-hidden="true">
         <span>🍗 −1</span><span>0</span><span>+1 ☕</span>
@@ -69,6 +69,22 @@
       <label class="toggle">
         <input type="checkbox" id="toggle-hexes" checked />
         <span>Index hexes</span>
+      </label>
+      <label class="toggle sub">
+        <input type="radio" name="hex-mode" id="mode-index" checked />
+        <span>colour: index</span>
+      </label>
+      <label class="toggle sub">
+        <input type="radio" name="hex-mode" id="mode-apprec" />
+        <span>colour: price growth</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-heat-coffee" />
+        <span>☕ Coffee density</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-heat-chicken" />
+        <span>🍗 Chicken density</span>
       </label>
       <label class="toggle">
         <input type="checkbox" id="toggle-buildings" />
@@ -87,18 +103,20 @@
         <div id="corr-stats"></div>
         <div id="corr-chart"></div>
         <p id="corr-blurb">
-          Cafés are a leading indicator of gentrification — a new coffee shop predicts rising
-          local house prices (<a
+          Cafés track affluence and takeaway density tracks deprivation (<a
             href="https://www.aeaweb.org/articles?id=10.1257%2Fpandp.20181034"
             target="_blank"
             rel="noopener"
             >Glaeser, Kim &amp; Luca 2018</a
-          >), while takeaway density tracks deprivation (<a
+          >; <a
             href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4415115/"
             target="_blank"
             rel="noopener"
             >Maguire et&nbsp;al. 2015</a
-          >). Correlation, not causation — and hexes are areas, not people.
+          >) — which is what the level correlation shows. The growth result is the
+          2010s London story: prime districts stalled while Dagenham, Leyton and Abbey
+          Wood caught up from a low base. Correlation, not causation — and hexes are
+          areas, not people.
         </p>
       </div>
     </details>
@@ -109,6 +127,7 @@
       <div id="info-verdict"></div>
       <div id="info-counts"></div>
       <div id="info-price"></div>
+      <div id="info-growth"></div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Build the Coffee–Fried Chicken Index hex grid and price correlation.
+"""Build the Coffee–Fried Chicken Index hex grid, price history and correlations.
 
 - H3 res-9 grid over the Greater London boundary
 - Gaussian k-ring smoothing of POI counts (σ=1 in hex-distance units, k≤2)
 - score = (coffee − chicken) / (coffee + chicken) on smoothed counts, in [−1, 1]
 - median sale price per hex (sales pooled over grid_disk k=1, n ≥ MIN_SALES)
-- Pearson (score vs log price) + Spearman across qualifying hexes
+- per postcode district: annual median series since 2011 and price multiples
+- correlations: score vs current price, and score vs district growth over both
+  a 15-year and a 10-year window
 
-Outputs public/data/hexes.geojson (minified) and public/data/summary.json.
+Outputs public/data/{hexes.geojson,pois.geojson,districts.json,summary.json}.
 """
 
 import json
 import math
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
@@ -28,14 +30,63 @@ MIN_MASS = 1.5   # min weighted POI mass for a hex to get a score
 MIN_SALES = 8    # min pooled sales for a hex to get a median price
 SCATTER_MAX = 2000
 
+# Two growth windows. 2011 is the headline: it spans the whole 2012–2016 boom
+# and the gentrification cycle the index proxies, so districts actually spread
+# out. 2016 is carried alongside as the control — post-referendum London prices
+# were close to flat, which compresses between-district variance.
+Y0_LONG, Y0_SHORT = 2011, 2016
+RECENT_YEAR_SENTINEL = 9999
+MIN_DISTRICT_SALES = 30  # per district-year, else that year is a gap
+
 BOUNDARY = Path("data/raw/london_boundary.geojson")
 POIS = Path("data/build/pois.parquet")
 SALES = Path("data/build/sales.parquet")
+SERIES = Path("data/build/district_series.parquet")
 OUT_HEX = Path("public/data/hexes.geojson")
+OUT_POIS = Path("public/data/pois.geojson")
+OUT_DISTRICTS = Path("public/data/districts.json")
 OUT_SUMMARY = Path("public/data/summary.json")
 
 
+def build_districts(this_year: int) -> dict:
+    """Annual median series + growth multiples per postcode district."""
+    ds = pd.read_parquet(SERIES)
+    recent = {
+        r.outcode: (r.med, r.n)
+        for r in ds[ds.year == RECENT_YEAR_SENTINEL].itertuples()
+    }
+    years = list(range(Y0_LONG, this_year + 1))
+
+    districts = {}
+    for outcode, g in ds[ds.year != RECENT_YEAR_SENTINEL].groupby("outcode"):
+        med = {int(r.year): int(r.med) for r in g.itertuples() if r.n >= MIN_DISTRICT_SALES}
+        rec = recent.get(outcode)
+        rec_med = rec[0] if rec and rec[1] >= MIN_DISTRICT_SALES else None
+
+        def multiple(y0):
+            base = med.get(y0)
+            return round(rec_med / base, 2) if rec_med and base else None
+
+        districts[outcode] = {
+            "y0": Y0_LONG,
+            "m": [med.get(y) for y in years],
+            "mult15": multiple(Y0_LONG),
+            "mult10": multiple(Y0_SHORT),
+        }
+
+    # dense rank on the long-window multiple, fastest-growing first
+    ranked = sorted(
+        (oc for oc, d in districts.items() if oc != "_london" and d["mult15"]),
+        key=lambda oc: -districts[oc]["mult15"],
+    )
+    for i, oc in enumerate(ranked, start=1):
+        districts[oc]["rank15"] = i
+    districts["_meta"] = {"n_ranked": len(ranked), "years": years}
+    return districts
+
+
 def main() -> None:
+    this_year = date.today().year
     boundary = json.loads(BOUNDARY.read_text())
     cells = set(h3.h3shape_to_cells(h3.geo_to_h3shape(boundary), RES))
     print(f"grid: {len(cells):,} res-{RES} cells")
@@ -71,25 +122,37 @@ def main() -> None:
     for (cell, r), rank in zip(scored.items(), order):
         r["pct"] = int(round(100 * rank / max(len(svals) - 1, 1)))
 
-    # prices: sales per cell, pooled over immediate neighbors
+    # prices + outcode: sales per cell, pooled over immediate neighbours
+    districts = build_districts(this_year)
     sales = pd.read_parquet(SALES)
-    sale_prices = Counter()
-    sale_lists: dict[str, list] = {}
-    for price, lat, lon in zip(sales["price"], sales["lat"], sales["lon"]):
+    sale_prices: dict[str, list] = {}
+    sale_outcodes: dict[str, list] = {}
+    for price, outcode, lat, lon in zip(
+        sales["price"], sales["outcode"], sales["lat"], sales["lon"]
+    ):
         cell = h3.latlng_to_cell(lat, lon, RES)
-        sale_lists.setdefault(cell, []).append(price)
+        sale_prices.setdefault(cell, []).append(price)
+        sale_outcodes.setdefault(cell, []).append(outcode)
+
     for cell, r in scored.items():
-        pooled = []
+        pooled, pooled_oc = [], []
         for n in h3.grid_disk(cell, 1):
-            pooled.extend(sale_lists.get(n, ()))
+            pooled.extend(sale_prices.get(n, ()))
+            pooled_oc.extend(sale_outcodes.get(n, ()))
         if len(pooled) >= MIN_SALES:
             r["price"] = int(np.median(pooled))
             r["n"] = len(pooled)
+            # A hex is small enough that its sales almost all share one district;
+            # the mode is a clean assignment without needing district polygons.
+            r["outcode"] = Counter(pooled_oc).most_common(1)[0][0]
+            r["apprec"] = districts.get(r["outcode"], {}).get("mult15")
         else:
             r["price"] = None
             r["n"] = len(pooled)
+            r["outcode"] = None
+            r["apprec"] = None
 
-    # correlation
+    # correlation: score vs current price, per hex
     qual = [(r["score"], r["price"]) for r in scored.values() if r["price"]]
     xs = np.array([q[0] for q in qual])
     ys = np.array([q[1] for q in qual])
@@ -100,27 +163,99 @@ def main() -> None:
         f"pearson(log) r={pearson.statistic:.3f}  spearman ρ={spearman.statistic:.3f}"
     )
 
+    # correlation: district mean score vs district growth, both windows.
+    # Aggregating score up to the district keeps n honest (~250, not ~8,500).
+    dist_scores = defaultdict(list)
+    for r in scored.values():
+        if r["outcode"]:
+            dist_scores[r["outcode"]].append(r["score"])
+
+    def growth_corr(key, y0):
+        """Spearman of score vs growth, raw and net of the starting price level.
+
+        The raw number is dominated by mean reversion — cheap districts multiply
+        faster from a low base regardless of what is on the high street — so the
+        partial correlation, which holds the starting price fixed, is the one
+        that actually tests whether the index predicts growth.
+        """
+        rows = [
+            (float(np.mean(v)), districts[oc][key], districts[oc]["m"][y0 - Y0_LONG])
+            for oc, v in dist_scores.items()
+            if districts.get(oc, {}).get(key) and districts[oc]["m"][y0 - Y0_LONG]
+        ]
+        if len(rows) < 10:
+            return {"rho": None, "p": None, "partial": None, "partial_p": None, "n": len(rows)}
+        score, growth, base = (np.array(c) for c in zip(*rows))
+        res = stats.spearmanr(score, growth)
+        # partial correlation on ranks: residualise both against the base rank
+        rs, rg, rb = (stats.rankdata(a) for a in (score, growth, base))
+        resid = lambda y: y - np.polyval(np.polyfit(rb, y, 1), rb)
+        part = stats.pearsonr(resid(rs), resid(rg))
+        return {
+            "rho": float(res.statistic),
+            "p": float(res.pvalue),
+            "partial": float(part.statistic),
+            "partial_p": float(part.pvalue),
+            "n": len(rows),
+        }
+
+    g15 = growth_corr("mult15", Y0_LONG)
+    g10 = growth_corr("mult10", Y0_SHORT)
+    for label, g in ((Y0_LONG, g15), (Y0_SHORT, g10)):
+        print(
+            f"district growth {label}→now vs score: ρ={g['rho']:.3f} "
+            f"(net of {label} price level: {g['partial']:+.3f}, p={g['partial_p']:.2g}, n={g['n']})"
+        )
+
+    apprecs = np.array([r["apprec"] for r in scored.values() if r["apprec"]])
+    print(
+        "apprec quantiles:",
+        {q: round(float(np.percentile(apprecs, q)), 2) for q in (5, 25, 50, 75, 95)},
+    )
+
     # scatter sample (deterministic)
     rng = np.random.default_rng(42)
     idx = rng.choice(len(qual), size=min(SCATTER_MAX, len(qual)), replace=False)
     scatter = [[round(float(xs[i]), 3), int(ys[i])] for i in sorted(idx)]
 
-    # emit geojson
+    # emit hex geojson
     features = []
     for cell, r in scored.items():
         ring = [[round(lng, 5), round(lat, 5)] for lat, lng in h3.cell_to_boundary(cell)]
         ring.append(ring[0])
+        # Drop null-valued props rather than emitting `"apprec": null`: MapLibre
+        # cannot compare an expression against null, so ['has', ...] is the only
+        # workable no-data test in a paint expression. Smaller file, too.
+        props = {"h3": cell, **{k: v for k, v in r.items() if v is not None}}
         features.append(
             {
                 "type": "Feature",
                 "geometry": {"type": "Polygon", "coordinates": [ring]},
-                "properties": {"h3": cell, **r},
+                "properties": props,
             }
         )
     OUT_HEX.parent.mkdir(parents=True, exist_ok=True)
     OUT_HEX.write_text(
         json.dumps({"type": "FeatureCollection", "features": features}, separators=(",", ":"))
     )
+
+    # emit raw POI points for the density heatmaps
+    kmap = {"coffee": "c", "chicken": "f"}
+    poi_features = [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [round(lon, 5), round(lat, 5)]},
+            "properties": {"k": kmap[kind]},
+        }
+        for kind, lat, lon in zip(pois["kind"], pois["lat"], pois["lon"])
+    ]
+    OUT_POIS.write_text(
+        json.dumps(
+            {"type": "FeatureCollection", "features": poi_features}, separators=(",", ":")
+        )
+    )
+
+    OUT_DISTRICTS.write_text(json.dumps(districts, separators=(",", ":")))
 
     summary = {
         "generated": date.today().isoformat(),
@@ -138,12 +273,29 @@ def main() -> None:
         "score_quantiles": {
             str(q): round(float(np.percentile(svals, q)), 3) for q in (5, 25, 50, 75, 95)
         },
+        "apprec": {
+            "y0": Y0_LONG,
+            "y0_short": Y0_SHORT,
+            "rho15": round(g15["rho"], 3),
+            "p15": float(f"{g15['p']:.2e}"),
+            "partial15": round(g15["partial"], 3),
+            "partial15_p": float(f"{g15['partial_p']:.2e}"),
+            "rho10": round(g10["rho"], 3),
+            "partial10": round(g10["partial"], 3),
+            "n_districts": g15["n"],
+            "london_mult15": districts.get("_london", {}).get("mult15"),
+        },
         "scatter": scatter,
     }
     OUT_SUMMARY.write_text(json.dumps(summary, separators=(",", ":")))
-    size_mb = OUT_HEX.stat().st_size / 1e6
-    print(f"wrote {OUT_HEX} ({size_mb:.1f} MB) and {OUT_SUMMARY}")
-    if size_mb > 8:
+
+    hex_mb = OUT_HEX.stat().st_size / 1e6
+    poi_mb = OUT_POIS.stat().st_size / 1e6
+    print(
+        f"wrote {OUT_HEX} ({hex_mb:.1f} MB), {OUT_POIS} ({poi_mb:.1f} MB), "
+        f"{OUT_DISTRICTS}, {OUT_SUMMARY}"
+    )
+    if hex_mb > 5:
         print("WARNING: hexes.geojson larger than expected")
 
 

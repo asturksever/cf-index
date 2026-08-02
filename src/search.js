@@ -1,11 +1,12 @@
 // Postcode lookup: postcodes.io (free, CORS-friendly) -> h3 cell -> hex props.
 import maplibregl from 'maplibre-gl';
 import { latLngToCell } from 'h3-js';
-import { verdictFor, formatPrice } from './verdict.js';
+import { verdictFor, formatPrice, ordinal } from './verdict.js';
+import { sparkline } from './sparkline.js';
 
 const RES = 9;
 
-export function initSearch(map, hexProps) {
+export function initSearch(map, hexProps, districts) {
   const form = document.getElementById('search');
   const input = document.getElementById('pc-input');
   const result = document.getElementById('result');
@@ -15,8 +16,28 @@ export function initSearch(map, hexProps) {
   const meterDot = document.getElementById('result-meter-dot');
   const detail = document.getElementById('result-detail');
   const price = document.getElementById('result-price');
+  const history = document.getElementById('result-history');
+  const spark = document.getElementById('result-spark');
+  const historyNote = document.getElementById('result-history-note');
 
   let marker = null;
+
+  /** Draw the district's price history, falling back to the London-wide series. */
+  function showHistory(outcode) {
+    const own = districts?.[outcode];
+    const d = own ?? districts?._london;
+    const svg = d ? sparkline(d.m, d.y0) : '';
+    if (!svg) {
+      history.hidden = true;
+      return;
+    }
+    spark.innerHTML = svg;
+    const scope = own ? outcode : 'London-wide';
+    historyNote.textContent = own?.mult15
+      ? `${outcode}: ${own.mult15}× since ${d.y0} — ${ordinal(own.rank15)} fastest of ${districts._meta.n_ranked} London districts`
+      : `${scope} median since ${d.y0}${d.mult15 ? ` — ${d.mult15}× overall` : ''}`;
+    history.hidden = false;
+  }
 
   function showMessage(head, body) {
     title.textContent = head;
@@ -25,6 +46,7 @@ export function initSearch(map, hexProps) {
     meterDot.parentElement.hidden = true;
     detail.textContent = '';
     price.textContent = '';
+    history.hidden = true;
     result.hidden = false;
   }
 
@@ -78,6 +100,7 @@ export function initSearch(map, hexProps) {
     price.textContent = p.price
       ? `Median sale price around here: ${formatPrice(p.price)} (${p.n} sales, 2023–now)`
       : 'Too few recent sales nearby for a reliable median price.';
+    showHistory(data.outcode);
     result.hidden = false;
 
     marker?.remove();

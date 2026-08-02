@@ -18,7 +18,7 @@ permissions:
 jobs:
   build-data:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,7 +34,8 @@ jobs:
             data/raw/pp-*.csv
             data/raw/codepo_gb.zip
             data/raw/codepo_gb
-          # past-year PPD files are effectively immutable; current year changes monthly
+          # ~4 GB across 2011-now (repo cache limit is 10 GB). Past-year PPD
+          # files are effectively immutable; only the current year re-downloads.
           key: prices-${{ github.run_id }}
           restore-keys: prices-
 

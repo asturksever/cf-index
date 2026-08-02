@@ -9,10 +9,25 @@ export function initScatter(summary) {
   const stats = document.getElementById('corr-stats');
   const chart = document.getElementById('corr-chart');
 
+  const a = summary.apprec;
   stats.innerHTML =
     `<strong>Spearman ρ = ${summary.spearman_rho.toFixed(2)}</strong> · ` +
     `Pearson r = ${summary.pearson_log_r.toFixed(2)} (log price) · ` +
     `${summary.corr_n.toLocaleString()} hexes`;
+
+  if (a?.rho15 != null) {
+    const growth = document.createElement('div');
+    growth.id = 'corr-growth';
+    growth.title =
+      `Same test on a ${a.y0_short} baseline: ρ = ${a.rho10?.toFixed(2)} raw, ` +
+      `${a.partial10 >= 0 ? '+' : ''}${a.partial10?.toFixed(2)} net of price level — same story on both windows.`;
+    growth.innerHTML =
+      `<strong>Price growth is a different story.</strong> Districts that lean coffee grew ` +
+      `<em>slower</em> since ${a.y0} (ρ = ${a.rho15.toFixed(2)}, ${a.n_districts} districts) — but that is ` +
+      `mean reversion, not the coffee. Hold the ${a.y0} price level fixed and the index predicts ` +
+      `growth not at all (ρ = ${a.partial15 >= 0 ? '+' : ''}${a.partial15.toFixed(2)}, p = ${a.partial15_p > 0.01 ? a.partial15_p.toFixed(2) : a.partial15_p.toExponential(0)}).`;
+    stats.after(growth);
+  }
 
   const pts = summary.scatter;
   if (!pts?.length) return;
@@ -41,10 +56,10 @@ export function initScatter(summary) {
     svg += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${H - PAD.b}" stroke="#e5decf" stroke-width="${t === 0 ? 1.5 : 1}"/>`;
     svg += `<text x="${x}" y="${H - PAD.b + 12}" text-anchor="middle" font-size="9" fill="#8a8577">${t > 0 ? '+' + t : t}</text>`;
   }
-  svg += `<text x="${xTo(-1)}" y="${H - 2}" text-anchor="start" font-size="9" fill="#E8590C">🍗 chicken</text>`;
-  svg += `<text x="${xTo(1)}" y="${H - 2}" text-anchor="end" font-size="9" fill="#0B7285">coffee ☕</text>`;
+  svg += `<text x="${xTo(-1)}" y="${H - 2}" text-anchor="start" font-size="9" fill="#C2410C">🍗 chicken</text>`;
+  svg += `<text x="${xTo(1)}" y="${H - 2}" text-anchor="end" font-size="9" fill="#084C61">coffee ☕</text>`;
   for (const [x, y] of pts) {
-    svg += `<circle cx="${xTo(x).toFixed(1)}" cy="${yTo(y).toFixed(1)}" r="1.6" fill="#0B7285" fill-opacity="0.25"/>`;
+    svg += `<circle cx="${xTo(x).toFixed(1)}" cy="${yTo(y).toFixed(1)}" r="1.6" fill="#23859C" fill-opacity="0.25"/>`;
   }
   svg += '</svg>';
   chart.innerHTML = svg;
