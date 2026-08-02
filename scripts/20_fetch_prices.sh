@@ -1,4 +1,6 @@
-#!/bin/zsh
+#!/usr/bin/env bash
+# bash, not zsh: GitHub's ubuntu runners have no zsh, and a missing interpreter
+# fails as a bare "cannot execute: required file not found" (exit 127).
 # Download HM Land Registry Price Paid yearly CSVs + OS Code-Point Open.
 # Resumable (curl -C -); files land in data/raw/ and are gitignored.
 set -euo pipefail
