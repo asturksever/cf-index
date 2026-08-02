@@ -59,9 +59,10 @@
       </div>
     </aside>
 
-    <!-- Layer toggles -->
-    <aside id="layers" aria-label="Map layers">
-      <h2>Layers</h2>
+    <!-- Right-hand column: layers on top, the correlation panel beneath it -->
+    <div id="right-stack">
+      <aside id="layers" aria-label="Map layers">
+        <h2>Layers</h2>
       <label class="toggle">
         <input type="radio" name="hex-mode" id="mode-index" checked />
         <span>The Index</span>
@@ -82,11 +83,10 @@
         <input type="checkbox" id="toggle-heat-chicken" />
         <span>🐔 Chicken density</span>
       </label>
-    </aside>
+      </aside>
 
-    <!-- Correlation panel -->
-    <details id="corr" open>
-      <summary>Index × house prices</summary>
+      <details id="corr" open>
+        <summary>Index × house prices</summary>
       <div id="corr-body">
         <div id="corr-stats"></div>
         <div id="corr-chart"></div>
@@ -107,7 +107,8 @@
           areas, not people.
         </p>
       </div>
-    </details>
+      </details>
+    </div>
 
     <!-- Hover info card -->
     <div id="info" hidden>

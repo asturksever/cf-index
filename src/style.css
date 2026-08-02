@@ -271,12 +271,27 @@ body {
 }
 
 
-/* --- Layer toggles --- */
-#layers {
+/* --- Right-hand column: layers, then the correlation panel beneath it --- */
+#right-stack {
   position: absolute;
-  bottom: 52px;
+  top: 118px;
   right: 14px;
+  bottom: 52px;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  /* the column spans the full height, so let clicks through the empty gap */
+  pointer-events: none;
+}
+
+#right-stack > * {
+  pointer-events: auto;
+}
+
+#layers {
+  flex: none;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -311,14 +326,11 @@ body {
 
 /* --- Correlation panel --- */
 #corr {
-  position: absolute;
-  top: 118px;
-  right: 14px;
-  z-index: 10;
   width: 320px;
-  /* Never grow into the layers panel below; scroll internally on short
-     viewports instead. 400px covers the layers panel plus its bottom offset. */
-  max-height: calc(100vh - 400px);
+  /* Take whatever height is left under the layers panel and scroll inside it,
+     so the column never runs off the bottom of a short viewport. */
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: auto;
   background: var(--card);
   border: 1px solid var(--border);
@@ -461,6 +473,11 @@ body {
   }
   #corr {
     display: none;
+  }
+  /* With the correlation panel hidden the column is just the layers card, so
+     let it sit on the bottom row rather than stretching from the header down. */
+  #right-stack {
+    top: auto;
   }
   /* Legend and layers share the bottom row on a phone; both shrink so they
      sit side by side instead of overlapping. */
