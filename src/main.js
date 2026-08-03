@@ -7,7 +7,29 @@ import { verdictFor, formatPrice, ordinal } from './verdict.js';
 
 const DATA_BASE = `${import.meta.env.BASE_URL}data/`;
 
+// Starting point only: unless the URL carries a view, the map immediately fits
+// itself to the data instead, so London fills the window at any screen size.
 const HOME = { center: [-0.118, 51.5074], zoom: 9.7 };
+
+/** Bounding box of every scored hexagon, as [[w, s], [e, n]]. */
+function dataBounds(fc) {
+  let w = 180;
+  let s = 90;
+  let e = -180;
+  let n = -90;
+  for (const f of fc.features) {
+    for (const [lng, lat] of f.geometry.coordinates[0]) {
+      if (lng < w) w = lng;
+      if (lng > e) e = lng;
+      if (lat < s) s = lat;
+      if (lat > n) n = lat;
+    }
+  }
+  return [
+    [w, s],
+    [e, n],
+  ];
+}
 
 const [hexData, summary, poiData, districts] = await Promise.all([
   fetch(`${DATA_BASE}hexes.geojson`).then((r) => r.json()),
@@ -19,6 +41,10 @@ const [hexData, summary, poiData, districts] = await Promise.all([
 // h3 index -> feature properties, for the postcode lookup
 const hexProps = new Map(hexData.features.map((f) => [f.properties.h3, f.properties]));
 
+// Must be read before the map exists: constructing it with hash:true starts
+// writing the view into the URL, after which this can never look empty.
+const hadSharedView = Boolean(location.hash);
+
 const map = new maplibregl.Map({
   container: 'map',
   style: buildStyle(hexData, poiData),
@@ -27,11 +53,43 @@ const map = new maplibregl.Map({
   attributionControl: false,
 });
 
+// A fixed zoom frames London differently on a laptop and an ultrawide, so fit
+// the data instead. Skipped when the URL already carries a view, which is what
+// a shared or reloaded link relies on.
+const HOME_BOUNDS = dataBounds(hexData);
+const FIT = { padding: 30, animate: false };
+
+// Only genuine input counts: camera events carry an originalEvent when the user
+// caused them, and fitBounds itself fires zoomstart without one.
+let hasUserMoved = false;
+for (const ev of ['dragstart', 'zoomstart', 'rotatestart']) {
+  map.on(ev, (e) => {
+    if (e?.originalEvent) hasUserMoved = true;
+  });
+}
+
+/**
+ * Re-frame London, unless the view came from the URL or the user has taken
+ * over. A fit is only as good as the container size it was measured against,
+ * and that size is often wrong until well after startup.
+ */
+function refitIfUntouched() {
+  if (!hadSharedView && !hasUserMoved) map.fitBounds(HOME_BOUNDS, FIT);
+}
+
+refitIfUntouched();
+
 // Belt-and-braces: if the container had no size at construction (embedded
 // panes, hidden tabs), MapLibre falls back to a 400×300 canvas and its own
 // observer doesn't always recover. An extra resize is a no-op when sizes match.
-map.once('load', () => map.resize());
-new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
+map.once('load', () => {
+  map.resize();
+  refitIfUntouched();
+});
+new ResizeObserver(() => {
+  map.resize();
+  refitIfUntouched();
+}).observe(document.getElementById('map'));
 
 // No NavigationControl: scroll/pinch to zoom and right-drag to rotate keep the
 // map clean of chrome.
@@ -206,7 +264,12 @@ map.on('mouseout', () => {
   map.getCanvas().style.cursor = '';
 });
 
-initSearch(map, hexProps, districts);
+// A postcode lookup flies the camera programmatically, which carries no
+// originalEvent — without this a later window resize would re-frame London and
+// throw away the place the user just looked up.
+initSearch(map, hexProps, districts, () => {
+  hasUserMoved = true;
+});
 initFindings(summary);
 
 map.on('error', (e) => console.warn('map error:', e.error?.message ?? e));

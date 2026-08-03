@@ -15,7 +15,7 @@ function valueVerdict(v) {
   return 'you are paying for something other than the coffee';
 }
 
-export function initSearch(map, hexProps, districts) {
+export function initSearch(map, hexProps, districts, onTakeOver = () => {}) {
   const form = document.getElementById('search');
   const input = document.getElementById('pc-input');
   const result = document.getElementById('result');
@@ -120,6 +120,7 @@ export function initSearch(map, hexProps, districts) {
 
     marker?.remove();
     marker = new maplibregl.Marker({ color: v.color }).setLngLat([lng, lat]).addTo(map);
+    onTakeOver();
     map.flyTo({ center: [lng, lat], zoom: 13.2, duration: 2200 });
   });
 }
