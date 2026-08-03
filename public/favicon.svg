@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Emoji render from the system font; offset diagonally so both stay
+       legible when the tab scales this down to 16px. -->
+  <text x="1" y="30" font-size="32">☕</text>
+  <text x="31" y="62" font-size="32">🐔</text>
+</svg>

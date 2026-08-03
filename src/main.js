@@ -2,7 +2,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { buildStyle, INDEX_FILL, APPREC_FILL, VALUE_FILL } from './basemap-style.js';
 import { initSearch } from './search.js';
-import { initScatter } from './scatter.js';
+import { initFindings } from './findings.js';
 import { verdictFor, formatPrice, ordinal } from './verdict.js';
 
 const DATA_BASE = `${import.meta.env.BASE_URL}data/`;
@@ -207,7 +207,7 @@ map.on('mouseout', () => {
 });
 
 initSearch(map, hexProps, districts);
-initScatter(summary);
+initFindings(summary);
 
 map.on('error', (e) => console.warn('map error:', e.error?.message ?? e));
 

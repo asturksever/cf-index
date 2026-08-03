@@ -320,9 +320,10 @@ body {
   left: 14px;
   z-index: 10;
   width: 320px;
-  /* Stop just short of the legend in the bottom-left corner and scroll
-     internally rather than running off a short viewport. */
-  max-height: calc(100vh - 196px);
+  /* Stop clear of the legend in the bottom-left corner and scroll internally
+     rather than running off a short viewport. Budget: 72 top + 78 legend +
+     52 legend offset + 12 gap. */
+  max-height: calc(100vh - 214px);
   overflow-y: auto;
   background: var(--card);
   border: 1px solid var(--border);
@@ -349,14 +350,18 @@ body {
 @media (max-width: 1080px) {
   #corr {
     top: 120px;
-    max-height: calc(100vh - 252px);
+    max-height: calc(100vh - 262px);
   }
 }
 
-#corr-intro {
+#corr-intro,
+#corr-layers {
   font-size: 12.5px;
   line-height: 1.5;
-  margin: 8px 0 8px;
+  margin: 8px 0;
+}
+
+#corr-layers {
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(51, 48, 43, 0.1);
 }
@@ -372,12 +377,6 @@ body {
   line-height: 1.45;
   margin: 0 0 6px;
   cursor: help;
-}
-
-#corr-chart svg {
-  width: 100%;
-  height: auto;
-  display: block;
 }
 
 #corr-sources {
