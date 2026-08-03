@@ -218,16 +218,20 @@ export function buildStyle(hexData, poiData) {
           'heatmap-weight': 1,
           'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.09, 13, 0.22, 16, 0.45],
           'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 9, 12, 12, 22, 16, 40],
+          // Green, not teal: teal is the index's own coffee end, so a teal
+          // heatmap over teal hexes was impossible to tell apart. Green is the
+          // one hue no other layer uses — the index is orange/teal, both price
+          // modes are purple, chicken density is orange/brown.
           'heatmap-color': [
             'interpolate',
             ['linear'],
             ['heatmap-density'],
-            0, 'rgba(8,76,97,0)',
-            0.08, 'rgba(116,184,196,0.35)',
-            0.3, '#74B8C4',
-            0.6, '#2E9BB0',
-            0.85, '#0B7285',
-            1, '#084C61',
+            0, 'rgba(11,61,20,0)',
+            0.08, 'rgba(124,179,66,0.35)',
+            0.3, '#7CB342',
+            0.6, '#3E8E41',
+            0.85, '#1B5E20',
+            1, '#0B3D14',
           ],
           'heatmap-opacity': 0.8,
         },

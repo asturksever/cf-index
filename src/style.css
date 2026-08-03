@@ -71,12 +71,16 @@ body {
 #banner h1 {
   font-family: 'Fraunces', Georgia, serif;
   font-weight: 700;
-  font-size: 30px;
-  margin: 14px 0 0;
-  letter-spacing: 0.4px;
+  /* As large as fits on one line: the title is ~34 characters, so wrapping
+     starts around 5.2vw and would drop the second line onto the search bar. */
+  font-size: clamp(17px, 5.2vw, 38px);
+  margin: 10px 0 0;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
   text-shadow:
     0 1px 0 #fff,
-    0 0 14px rgba(255, 255, 255, 0.9);
+    0 0 18px rgba(255, 255, 255, 0.95),
+    0 2px 5px rgba(51, 48, 43, 0.14);
 }
 
 #top-scrim {
@@ -84,7 +88,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 110px;
+  height: 122px;
   z-index: 5;
   pointer-events: none;
   background: linear-gradient(
@@ -99,7 +103,7 @@ body {
 /* --- Postcode search --- */
 #search {
   position: absolute;
-  top: 64px;
+  top: 72px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 11;
@@ -142,7 +146,7 @@ body {
 /* --- Postcode result card --- */
 #result {
   position: absolute;
-  top: 118px;
+  top: 126px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 11;
@@ -312,7 +316,7 @@ body {
 /* --- Correlation panel --- */
 #corr {
   position: absolute;
-  top: 64px;
+  top: 72px;
   left: 14px;
   z-index: 10;
   width: 320px;
@@ -344,8 +348,8 @@ body {
    under it rather than letting the two collide. */
 @media (max-width: 1080px) {
   #corr {
-    top: 112px;
-    max-height: calc(100vh - 244px);
+    top: 120px;
+    max-height: calc(100vh - 252px);
   }
 }
 
@@ -470,11 +474,8 @@ body {
 
 /* --- Small screens --- */
 @media (max-width: 720px) {
-  #banner h1 {
-    font-size: 20px;
-  }
   #search {
-    top: 50px;
+    top: 54px;
     width: calc(100vw - 24px);
   }
   #pc-input {
@@ -482,7 +483,7 @@ body {
     width: auto;
   }
   #result {
-    top: 96px;
+    top: 100px;
   }
   #corr {
     display: none;
