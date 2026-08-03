@@ -61,16 +61,18 @@
 
     <aside id="layers" aria-label="Map layers">
         <h2>Layers</h2>
+      <!-- Checkboxes, not radios: only one colouring can apply at a time, but
+           unlike a radio each can be clicked off to hide the hexes entirely. -->
       <label class="toggle">
-        <input type="radio" name="hex-mode" id="mode-index" checked />
+        <input type="checkbox" id="mode-index" checked />
         <span>The Index</span>
       </label>
       <label class="toggle">
-        <input type="radio" name="hex-mode" id="mode-apprec" />
+        <input type="checkbox" id="mode-apprec" />
         <span>Price Growth</span>
       </label>
       <label class="toggle">
-        <input type="radio" name="hex-mode" id="mode-value" />
+        <input type="checkbox" id="mode-value" />
         <span>Value Spots</span>
       </label>
       <label class="toggle">

@@ -90,9 +90,20 @@ const MODES = {
   value: { title: 'Value spots', labels: ['low', '', 'best value'], fill: VALUE_FILL },
 };
 
+const HEX_LAYERS = ['hex-fill', 'hex-outline'];
+
 function applyHexMode() {
-  const mode = ['apprec', 'value'].find((m) => document.getElementById(`mode-${m}`).checked)
-    ?? 'index';
+  const mode = Object.keys(MODES).find((m) => document.getElementById(`mode-${m}`).checked);
+
+  // No colouring selected means the user switched the hexes off entirely.
+  for (const layer of HEX_LAYERS) {
+    if (map.getLayer(layer)) {
+      map.setLayoutProperty(layer, 'visibility', mode ? 'visible' : 'none');
+    }
+  }
+  legendEl.hidden = !mode;
+  if (!mode) return;
+
   if (map.getLayer('hex-fill')) {
     map.setPaintProperty('hex-fill', 'fill-color', MODES[mode].fill);
   }
@@ -106,8 +117,17 @@ function applyHexMode() {
     }),
   );
 }
-for (const id of ['mode-index', 'mode-apprec', 'mode-value']) {
-  document.getElementById(id).addEventListener('change', applyHexMode);
+
+for (const id of Object.keys(MODES)) {
+  document.getElementById(`mode-${id}`).addEventListener('change', (e) => {
+    // Mutually exclusive by hand, since checkboxes have no grouping of their own.
+    if (e.target.checked) {
+      for (const other of Object.keys(MODES)) {
+        if (other !== id) document.getElementById(`mode-${other}`).checked = false;
+      }
+    }
+    applyHexMode();
+  });
 }
 map.on('load', applyHexMode);
 
