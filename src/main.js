@@ -1,6 +1,12 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { buildStyle, INDEX_FILL, APPREC_FILL, VALUE_FILL } from './basemap-style.js';
+import {
+  buildStyle,
+  INDEX_FILL,
+  ARTISANAL_FILL,
+  APPREC_FILL,
+  VALUE_FILL,
+} from './basemap-style.js';
 import { initSearch } from './search.js';
 import { initFindings } from './findings.js';
 import { verdictFor, formatPrice, ordinal } from './verdict.js';
@@ -144,6 +150,11 @@ const legendLabels = document.getElementById('legend-labels');
 const legendEl = document.getElementById('legend');
 const MODES = {
   index: { title: 'The index', labels: ['🐔 −1', '0', '+1 ☕'], fill: INDEX_FILL },
+  artisanal: {
+    title: 'Artisanal index',
+    labels: ['🐔 −1', '0', '+1 ☕'],
+    fill: ARTISANAL_FILL,
+  },
   apprec: { title: 'Price growth', labels: ['1.35×', '1.9×', '2.4×+'], fill: APPREC_FILL },
   value: { title: 'Value spots', labels: ['low', '', 'best value'], fill: VALUE_FILL },
 };
@@ -226,11 +237,20 @@ function updateInfoCard(point) {
     return;
   }
   const p = features[0].properties;
-  const v = verdictFor(p.score);
-  infoScore.textContent = `${p.score > 0 ? '+' : ''}${p.score.toFixed(2)}`;
+  // In artisanal mode the headline score would contradict the colour under the
+  // cursor, so the card reports whichever score is being drawn.
+  const artisanal = document.getElementById('mode-artisanal').checked;
+  const score = artisanal && p.score_i != null ? p.score_i : p.score;
+  const v = verdictFor(score);
+  infoScore.textContent = `${score > 0 ? '+' : ''}${score.toFixed(2)}`;
   infoScore.style.color = v.color;
-  infoVerdict.textContent = `${v.label} · ${ordinal(p.pct)} percentile`;
-  infoCounts.textContent = `☕ ${p.c} in hex (${p.cs} nearby) · 🐔 ${p.f} in hex (${p.fs} nearby)`;
+  infoVerdict.textContent = artisanal
+    ? `${v.label} · independents only`
+    : `${v.label} · ${ordinal(p.pct)} percentile`;
+  const chains = p.c - p.ci;
+  infoCounts.textContent =
+    `☕ ${p.cs} nearby (${p.cis} independent) · 🐔 ${p.fs} nearby` +
+    (p.c ? ` · ${p.c} in hex, ${chains} chain` : '');
   infoPrice.textContent = p.price
     ? `median sale ${formatPrice(p.price)} (${p.n} sales)`
     : 'too few recent sales for a median';
