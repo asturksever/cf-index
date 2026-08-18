@@ -31,11 +31,12 @@ function dataBounds(fc) {
   ];
 }
 
-const [hexData, summary, poiData, districts] = await Promise.all([
+const [hexData, summary, poiData, districts, bananaData] = await Promise.all([
   fetch(`${DATA_BASE}hexes.geojson`).then((r) => r.json()),
   fetch(`${DATA_BASE}summary.json`).then((r) => r.json()),
   fetch(`${DATA_BASE}pois.geojson`).then((r) => r.json()),
   fetch(`${DATA_BASE}districts.json`).then((r) => r.json()),
+  fetch(`${DATA_BASE}banana.geojson`).then((r) => r.json()),
 ]);
 
 // h3 index -> feature properties, for the postcode lookup
@@ -47,7 +48,7 @@ const hadSharedView = Boolean(location.hash);
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: buildStyle(hexData, poiData),
+  style: buildStyle(hexData, poiData, bananaData),
   ...HOME,
   hash: true,
   attributionControl: false,
@@ -125,6 +126,7 @@ map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-lef
 const LAYER_TOGGLES = [
   { input: 'toggle-heat-coffee', layers: ['heat-coffee'] },
   { input: 'toggle-heat-chicken', layers: ['heat-chicken'] },
+  { input: 'toggle-banana', layers: ['banana-fill', 'banana-outline'] },
 ];
 for (const { input, layers } of LAYER_TOGGLES) {
   const checkbox = document.getElementById(input);
