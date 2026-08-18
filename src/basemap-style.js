@@ -75,8 +75,9 @@ export const VALUE_FILL = [
 /**
  * @param {object} hexData parsed GeoJSON FeatureCollection of index hexes
  * @param {object} poiData parsed GeoJSON FeatureCollection of raw POI points
+ * @param {object} bananaData parsed GeoJSON of the London Banana polygon
  */
-export function buildStyle(hexData, poiData) {
+export function buildStyle(hexData, poiData, bananaData) {
   return {
     version: 8,
     name: 'CFC Index — latte & terracotta',
@@ -95,6 +96,12 @@ export function buildStyle(hexData, poiData) {
       pois: {
         type: 'geojson',
         data: poiData,
+      },
+      banana: {
+        type: 'geojson',
+        data: bananaData,
+        attribution:
+          'London Banana: <a href="https://x.com/Saul_Sadka/status/1959609109939892706" target="_blank" rel="noopener">Saul Sadka</a> (indicative)',
       },
     },
     layers: [
@@ -156,6 +163,23 @@ export function buildStyle(hexData, poiData) {
         paint: {
           'line-color': COLORS.roadMajor,
           'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 5, 0.6, 10, 1.4, 14, 5, 18, 20],
+        },
+      },
+      // --- The London Banana (toggled, off by default) ---
+      // The wash goes UNDER the hexes, not over them. Yellow over the index's
+      // teal end makes green — a colour that is not on the legend and is the
+      // coffee-density layer's hue — so an overlay wash misreported the data at
+      // any opacity worth seeing. Underneath, the hexes keep their own colour
+      // and the yellow reads through the gaps instead. The outline goes on top
+      // (below) and is what actually delineates the region.
+      {
+        id: 'banana-fill',
+        type: 'fill',
+        source: 'banana',
+        layout: { visibility: 'none' },
+        paint: {
+          'fill-color': '#FFD400',
+          'fill-opacity': ['interpolate', ['linear'], ['zoom'], 9, 0.45, 13, 0.35, 16, 0.25],
         },
       },
       // --- the index (the data!) ---
@@ -234,6 +258,20 @@ export function buildStyle(hexData, poiData) {
             1, '#0B3D14',
           ],
           'heatmap-opacity': 0.8,
+        },
+      },
+      {
+        id: 'banana-outline',
+        type: 'line',
+        source: 'banana',
+        layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#E8A400',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 2.5, 13, 3.5, 16, 4.5],
+          'line-opacity': 1,
+          // dashed, because a solid ring would imply a precision this freehand
+          // outline does not have — the original stroke is 1–2 km wide
+          'line-dasharray': [3, 2],
         },
       },
       // --- labels ---
