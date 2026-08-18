@@ -41,6 +41,28 @@ CHICKEN_NAME = re.compile(
 FOOD_CAT_HINTS = ("restaurant", "fast_food")  # substring match on the category leaf
 FOOD_CATS = COFFEE_CATS | CHICKEN_CATS | {"cafeteria", "food_truck", "food_stand"}
 
+# Named chains, supermarket cafés and forecourt counters. Only ~17% of coffee
+# POIs carry an Overture brand, so a name list does most of the work here.
+CHAIN_NAME = re.compile(
+    r"""
+    costa|starbucks|pret\s*a\s*manger|caff[eè]?\s*nero|nero\s*express|greggs|gail|
+    black\s*sheep\s*coffee|blank\s*street|wild\s*bean|patisserie\s*valerie|
+    harris\s*(?:\+|and|&)\s*hoole|esquires|benugo|puccino|whittard|\bamt\s*coffee|
+    caff[eè]\s*ritazza|coffee\s*republic|chaiiwala|kaspa|creams\s*caf|mooboo|
+    \bleon\b|\bpaul\b|\bitsu\b|joe\s*&\s*the\s*juice|coco\s*di\s*mama|cafe\s*rouge|
+    le\s*pain\s*quotidien|tim\s*hortons|dunkin|mcdonald|mccaf|jamaica\s*blue|
+    change\s*please|department\s*of\s*coffee|hagen|doughnut\s*time|
+    m\s*&\s*s|marks\s*&\s*spencer|sainsbury|tesco|asda|morrisons|waitrose|
+    whole\s*foods|\bwfm\b|\bikea\b|john\s*lewis
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+# A name repeated this often across London is a chain even if we never named it.
+# Kept high because generic names collide: several unrelated independents are
+# called "Bridge Cafe", and a lower cut would brand them all as a chain.
+CHAIN_NAME_SITES = 8
+CHAIN_BRAND_SITES = 3  # an Overture brand shared by this many places is a chain
+
 MIN_CONFIDENCE = 0.5
 MIN_COUNT_GATE = 300  # abort if a class comes back suspiciously small
 
@@ -92,6 +114,37 @@ def classify(df: pd.DataFrame) -> pd.DataFrame:
     return df[df["kind"].notna()].copy()
 
 
+def _norm(s: pd.Series) -> pd.Series:
+    return s.fillna("").str.lower().str.replace(r"[^a-z0-9]+", "", regex=True)
+
+
+def flag_chains(df: pd.DataFrame) -> pd.DataFrame:
+    """Mark coffee POIs as chain or independent.
+
+    Three signals, any of which is enough: a named chain, an Overture brand
+    shared across several sites, or the same name repeated across London. The
+    frequency rules catch chains the name list has never heard of, which is what
+    keeps this from rotting as new ones open.
+    """
+    coffee = df["kind"] == "coffee"
+    name_brand = df["name"].fillna("") + " " + df["brand"].fillna("")
+    nn = _norm(df["name"])
+    bn = _norm(df["brand"])
+
+    name_sites = nn[coffee].value_counts()
+    brand_sites = bn[coffee & bn.ne("")].value_counts()
+
+    df = df.assign(
+        chain=(
+            name_brand.str.contains(CHAIN_NAME)
+            | nn.map(name_sites).fillna(0).ge(CHAIN_NAME_SITES)
+            | bn.map(brand_sites).fillna(0).ge(CHAIN_BRAND_SITES)
+        )
+        & coffee  # the split is only meaningful for coffee
+    )
+    return df
+
+
 def clip_and_dedupe(df: pd.DataFrame) -> pd.DataFrame:
     boundary = shape(json.loads(BOUNDARY.read_text()))
     pts = shapely.points(df["lon"].to_numpy(), df["lat"].to_numpy())
@@ -129,18 +182,28 @@ def main() -> None:
     df = raw[raw["confidence"] >= MIN_CONFIDENCE]
     df = classify(df)
     df = clip_and_dedupe(df)
+    # after the clip, so site counts reflect London rather than the wider bbox
+    df = flag_chains(df)
 
     counts = df["kind"].value_counts()
     n_coffee, n_chicken = counts.get("coffee", 0), counts.get("chicken", 0)
-    print(f"coffee: {n_coffee:,}   chicken: {n_chicken:,}")
+    n_chain = int(df["chain"].sum())
+    n_indie = n_coffee - n_chain
+    print(f"coffee: {n_coffee:,} ({n_chain:,} chain / {n_indie:,} independent)   chicken: {n_chicken:,}")
     for kind in ("coffee", "chicken"):
         sample = df[df["kind"] == kind]["name"].head(8).tolist()
         print(f"  sample {kind}: {sample}")
+    print(f"  top chains: {df[df['chain']]['name'].value_counts().head(6).index.tolist()}")
+    print(f"  top independents: {df[~df['chain'] & (df['kind'] == 'coffee')]['name'].value_counts().head(6).index.tolist()}")
     if n_coffee < MIN_COUNT_GATE or n_chicken < MIN_COUNT_GATE:
         raise SystemExit("count below sanity floor — extract looks truncated, aborting")
+    if not 0.05 < n_chain / n_coffee < 0.5:
+        raise SystemExit(f"chain share {n_chain / n_coffee:.0%} implausible — check CHAIN_NAME")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    df[["id", "kind", "name", "brand", "confidence", "lon", "lat"]].to_parquet(OUT, index=False)
+    df[["id", "kind", "chain", "name", "brand", "confidence", "lon", "lat"]].to_parquet(
+        OUT, index=False
+    )
     print(f"wrote {OUT} ({len(df):,} POIs)")
 
 

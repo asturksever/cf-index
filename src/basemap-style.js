@@ -30,6 +30,16 @@ export const RAMP = [
 
 export const INDEX_FILL = ['interpolate', ['linear'], ['get', 'score'], ...RAMP.flat()];
 
+// Same ramp, scored on independent coffee only. Hexes with too few
+// independents to say anything fall back to the no-data grey rather than
+// borrowing the headline score.
+export const ARTISANAL_FILL = [
+  'case',
+  ['!', ['has', 'score_i']],
+  'rgba(51, 48, 43, 0.08)',
+  ['interpolate', ['linear'], ['get', 'score_i'], ...RAMP.flat()],
+];
+
 // Sequential purple, deliberately nothing like the diverging index ramp so the
 // two colouring modes can never be confused. Hexes whose district lacks enough
 // sales for a 2011 baseline render as faint grey rather than a fake value.
@@ -236,7 +246,8 @@ export function buildStyle(hexData, poiData, bananaData) {
         id: 'heat-coffee',
         type: 'heatmap',
         source: 'pois',
-        filter: ['==', ['get', 'k'], 'c'],
+        // 'c' and 'cc' are independent and chain coffee; this layer shows both
+        filter: ['!=', ['get', 'k'], 'f'],
         layout: { visibility: 'none' },
         paint: {
           'heatmap-weight': 1,

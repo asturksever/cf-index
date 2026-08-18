@@ -94,28 +94,43 @@ def main() -> None:
     print(f"grid: {len(cells):,} res-{RES} cells")
 
     pois = pd.read_parquet(POIS)
-    counts = {"coffee": Counter(), "chicken": Counter()}
-    for kind, lat, lon in zip(pois["kind"], pois["lat"], pois["lon"]):
-        counts[kind][h3.latlng_to_cell(lat, lon, RES)] += 1
+    # "indie" is the coffee subset with the chains removed; it is counted
+    # separately so the map can offer an artisanal-only reading of the index.
+    counts = {"coffee": Counter(), "chicken": Counter(), "indie": Counter()}
+    for kind, chain, lat, lon in zip(pois["kind"], pois["chain"], pois["lat"], pois["lon"]):
+        cell = h3.latlng_to_cell(lat, lon, RES)
+        counts[kind][cell] += 1
+        if kind == "coffee" and not chain:
+            counts["indie"][cell] += 1
     n_coffee = int(pois["kind"].eq("coffee").sum())
     n_chicken = int(pois["kind"].eq("chicken").sum())
+    n_chain = int(pois["chain"].sum())
+    n_indie = n_coffee - n_chain
 
     # smoothed counts + score
     rows = {}
     for cell in cells:
-        cs = fs = 0.0
+        cs = fs = is_ = 0.0
         for d, w in SMOOTH_W.items():
             for n in h3.grid_ring(cell, d):
                 cs += w * counts["coffee"].get(n, 0)
                 fs += w * counts["chicken"].get(n, 0)
+                is_ += w * counts["indie"].get(n, 0)
         mass = cs + fs
+        indie_mass = is_ + fs
         score = (cs - fs) / mass if mass >= MIN_MASS else None
+        # Independents are a smaller population, so plenty of hexes carry a
+        # headline score but not enough artisanal mass to say anything.
+        score_i = (is_ - fs) / indie_mass if indie_mass >= MIN_MASS else None
         rows[cell] = {
             "c": counts["coffee"].get(cell, 0),
             "f": counts["chicken"].get(cell, 0),
+            "ci": counts["indie"].get(cell, 0),
             "cs": round(cs, 1),
             "fs": round(fs, 1),
+            "cis": round(is_, 1),
             "score": None if score is None else round(score, 3),
+            "score_i": None if score_i is None else round(score_i, 3),
         }
 
     scored = {c: r for c, r in rows.items() if r["score"] is not None}
@@ -280,15 +295,17 @@ def main() -> None:
         json.dumps({"type": "FeatureCollection", "features": features}, separators=(",", ":"))
     )
 
-    # emit raw POI points for the density heatmaps
-    kmap = {"coffee": "c", "chicken": "f"}
+    # emit raw POI points for the density heatmaps. Chains carry k='cc' so the
+    # coffee heatmap can be narrowed to independents without a second source.
     poi_features = [
         {
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [round(lon, 5), round(lat, 5)]},
-            "properties": {"k": kmap[kind]},
+            "properties": {"k": "f" if kind == "chicken" else ("cc" if chain else "c")},
         }
-        for kind, lat, lon in zip(pois["kind"], pois["lat"], pois["lon"])
+        for kind, chain, lat, lon in zip(
+            pois["kind"], pois["chain"], pois["lat"], pois["lon"]
+        )
     ]
     OUT_POIS.write_text(
         json.dumps(
@@ -304,6 +321,8 @@ def main() -> None:
         "res": RES,
         "n_hexes": len(scored),
         "n_coffee": n_coffee,
+        "n_chain": n_chain,
+        "n_indie": n_indie,
         "n_chicken": n_chicken,
         "n_sales": int(len(sales)),
         "corr_n": len(qual),

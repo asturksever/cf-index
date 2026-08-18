@@ -22,6 +22,23 @@ layers, a **price-growth mode** tinting each hex by how much its postcode
 district's median sale price has multiplied since 2011, and a **value-spots
 mode**.
 
+### Artisanal index (chains excluded)
+
+A Costa and an independent roaster say different things about a high street, so
+the index is also computed with the chains taken out
+([#2](https://github.com/asturksever/cf-index/issues/2)). A coffee POI counts as
+a chain if it matches a known brand list (Costa, Starbucks, Pret, the
+supermarket and forecourt cafés), or shares an Overture brand with 3+ other
+sites, or repeats the same name at 8+ sites across London. That last threshold
+is deliberately high: several unrelated independents are called "Bridge Cafe",
+and a lower cut would brand them all a chain.
+
+That splits 10,886 coffee shops into **2,451 chain / 8,435 independent**. 7,752
+hexes have enough independents to score. **124 hexes flip from coffee-leaning to
+chicken-leaning** once chains come out, and the largest falls are in Enfield,
+Ruislip, Uxbridge and Greenford — outer high streets whose coffee presence is a
+Costa rather than a roastery.
+
 ### Value spots
 
 A modern rerun of [Londonist's 2015 coffee-and-chicken
