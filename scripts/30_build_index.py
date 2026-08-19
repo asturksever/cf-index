@@ -14,6 +14,7 @@ Outputs public/data/{hexes.geojson,pois.geojson,districts.json,summary.json}.
 
 import json
 import math
+import sys
 from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
@@ -23,6 +24,9 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from shapely.geometry import shape
+
+sys.path.insert(0, str(Path(__file__).parent))
+from cities import boundary_path, build_dir, parse_city, public_dir  # noqa: E402
 
 RES = 9
 SMOOTH_W = {0: 1.0, 1: math.exp(-0.5), 2: math.exp(-2.0)}  # gaussian σ=1 by grid distance
@@ -38,19 +42,12 @@ Y0_LONG, Y0_SHORT = 2011, 2016
 RECENT_YEAR_SENTINEL = 9999
 MIN_DISTRICT_SALES = 30  # per district-year, else that year is a gap
 
-BOUNDARY = Path("data/raw/london_boundary.geojson")
-POIS = Path("data/build/pois.parquet")
-SALES = Path("data/build/sales.parquet")
-SERIES = Path("data/build/district_series.parquet")
-OUT_HEX = Path("public/data/hexes.geojson")
-OUT_POIS = Path("public/data/pois.geojson")
-OUT_DISTRICTS = Path("public/data/districts.json")
-OUT_SUMMARY = Path("public/data/summary.json")
 
 
-def build_districts(this_year: int) -> dict:
+
+def build_districts(this_year: int, series_path: Path) -> dict:
     """Annual median series + growth multiples per postcode district."""
-    ds = pd.read_parquet(SERIES)
+    ds = pd.read_parquet(series_path)
     recent = {
         r.outcode: (r.med, r.n)
         for r in ds[ds.year == RECENT_YEAR_SENTINEL].itertuples()
@@ -76,7 +73,7 @@ def build_districts(this_year: int) -> dict:
 
     # dense rank on the long-window multiple, fastest-growing first
     ranked = sorted(
-        (oc for oc, d in districts.items() if oc != "_london" and d["mult15"]),
+        (oc for oc, d in districts.items() if oc != "_city" and d["mult15"]),
         key=lambda oc: -districts[oc]["mult15"],
     )
     for i, oc in enumerate(ranked, start=1):
@@ -86,14 +83,18 @@ def build_districts(this_year: int) -> dict:
 
 
 def main() -> None:
+    slug, cfg = parse_city()
+    build, public = build_dir(slug), public_dir(slug)
+    out_hex = public / "hexes.geojson"
+    out_pois = public / "pois.geojson"
     this_year = date.today().year
-    boundary = json.loads(BOUNDARY.read_text())
+    boundary = json.loads(boundary_path(slug).read_text())
     # sorted, not a raw set: keeps feature order (and therefore the committed
     # GeoJSON) byte-identical across runs when the inputs have not changed
     cells = sorted(set(h3.h3shape_to_cells(h3.geo_to_h3shape(boundary), RES)))
     print(f"grid: {len(cells):,} res-{RES} cells")
 
-    pois = pd.read_parquet(POIS)
+    pois = pd.read_parquet(build / "pois.parquet")
     counts = {"coffee": Counter(), "chicken": Counter()}
     for kind, lat, lon in zip(pois["kind"], pois["lat"], pois["lon"]):
         counts[kind][h3.latlng_to_cell(lat, lon, RES)] += 1
@@ -129,8 +130,8 @@ def main() -> None:
         r["pct"] = int(round(100 * rank / max(len(svals) - 1, 1)))
 
     # prices + outcode: sales per cell, pooled over immediate neighbours
-    districts = build_districts(this_year)
-    sales = pd.read_parquet(SALES)
+    districts = build_districts(this_year, build / "district_series.parquet")
+    sales = pd.read_parquet(build / "sales.parquet")
     sale_prices: dict[str, list] = {}
     sale_outcodes: dict[str, list] = {}
     for price, outcode, lat, lon in zip(
@@ -275,8 +276,7 @@ def main() -> None:
                 "properties": props,
             }
         )
-    OUT_HEX.parent.mkdir(parents=True, exist_ok=True)
-    OUT_HEX.write_text(
+    out_hex.write_text(
         json.dumps({"type": "FeatureCollection", "features": features}, separators=(",", ":"))
     )
 
@@ -290,15 +290,17 @@ def main() -> None:
         }
         for kind, lat, lon in zip(pois["kind"], pois["lat"], pois["lon"])
     ]
-    OUT_POIS.write_text(
+    out_pois.write_text(
         json.dumps(
             {"type": "FeatureCollection", "features": poi_features}, separators=(",", ":")
         )
     )
 
-    OUT_DISTRICTS.write_text(json.dumps(districts, separators=(",", ":")))
+    (public / "districts.json").write_text(json.dumps(districts, separators=(",", ":")))
 
     summary = {
+        "city": cfg["name"],
+        "slug": slug,
         "generated": date.today().isoformat(),
         "release": "Overture 2026-07-22.0",
         "res": RES,
@@ -324,18 +326,18 @@ def main() -> None:
             "rho10": round(g10["rho"], 3),
             "partial10": round(g10["partial"], 3),
             "n_districts": g15["n"],
-            "london_mult15": districts.get("_london", {}).get("mult15"),
+            "city_mult15": districts.get("_city", {}).get("mult15"),
         },
         "top_value": top_value,
         "scatter": scatter,
     }
-    OUT_SUMMARY.write_text(json.dumps(summary, separators=(",", ":")))
+    (public / "summary.json").write_text(json.dumps(summary, separators=(",", ":")))
 
-    hex_mb = OUT_HEX.stat().st_size / 1e6
-    poi_mb = OUT_POIS.stat().st_size / 1e6
+    hex_mb = out_hex.stat().st_size / 1e6
+    poi_mb = out_pois.stat().st_size / 1e6
     print(
-        f"wrote {OUT_HEX} ({hex_mb:.1f} MB), {OUT_POIS} ({poi_mb:.1f} MB), "
-        f"{OUT_DISTRICTS}, {OUT_SUMMARY}"
+        f"wrote {out_hex} ({hex_mb:.1f} MB), {out_pois} ({poi_mb:.1f} MB), "
+        f"{public}/districts.json, {public}/summary.json"
     )
     if hex_mb > 5:
         print("WARNING: hexes.geojson larger than expected")

@@ -88,7 +88,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 122px;
+  height: 158px;
   z-index: 5;
   pointer-events: none;
   background: linear-gradient(
@@ -100,10 +100,53 @@ body {
   );
 }
 
-/* --- Postcode search --- */
+/* --- City switcher --- */
+#cities {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 12px rgba(51, 48, 43, 0.14);
+}
+
+#cities button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+#cities button[aria-pressed='true'] {
+  background: var(--coffee);
+  color: #fff;
+}
+
+#cities button:hover:not([aria-pressed='true']) {
+  color: var(--text);
+  background: rgba(11, 114, 133, 0.08);
+}
+
+#cities[aria-busy='true'] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 #search {
   position: absolute;
-  top: 72px;
+  top: 108px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 11;
@@ -146,7 +189,7 @@ body {
 /* --- Postcode result card --- */
 #result {
   position: absolute;
-  top: 126px;
+  top: 162px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 11;

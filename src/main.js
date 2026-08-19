@@ -31,16 +31,29 @@ function dataBounds(fc) {
   ];
 }
 
-const [hexData, summary, poiData, districts, bananaData] = await Promise.all([
-  fetch(`${DATA_BASE}hexes.geojson`).then((r) => r.json()),
-  fetch(`${DATA_BASE}summary.json`).then((r) => r.json()),
-  fetch(`${DATA_BASE}pois.geojson`).then((r) => r.json()),
-  fetch(`${DATA_BASE}districts.json`).then((r) => r.json()),
-  fetch(`${DATA_BASE}banana.geojson`).then((r) => r.json()),
-]);
+const CITIES = ['london', 'manchester', 'liverpool'];
 
-// h3 index -> feature properties, for the postcode lookup
-const hexProps = new Map(hexData.features.map((f) => [f.properties.h3, f.properties]));
+/** Slug from ?city=, falling back to London. */
+function requestedCity() {
+  const q = new URLSearchParams(location.search).get('city');
+  return CITIES.includes(q) ? q : 'london';
+}
+
+const cityFiles = (slug) =>
+  Promise.all(
+    ['hexes.geojson', 'summary.json', 'pois.geojson', 'districts.json'].map((f) =>
+      fetch(`${DATA_BASE}${slug}/${f}`).then((r) => r.json()),
+    ),
+  );
+
+let city = requestedCity();
+const [hexData, summary, poiData, districts] = await cityFiles(city);
+// The Banana is a London artefact, so it lives outside the per-city folders.
+const bananaData = await fetch(`${DATA_BASE}banana.geojson`).then((r) => r.json());
+
+// h3 index -> feature properties, for the postcode lookup. Rebuilt on each
+// city switch, so it is a `let` the search closure reads through.
+let hexProps = new Map(hexData.features.map((f) => [f.properties.h3, f.properties]));
 
 // Must be read before the map exists: constructing it with hash:true starts
 // writing the view into the URL, after which this can never look empty.
@@ -57,7 +70,7 @@ const map = new maplibregl.Map({
 // A fixed zoom frames London differently on a laptop and an ultrawide, so fit
 // the data instead. Skipped when the URL already carries a view, which is what
 // a shared or reloaded link relies on.
-const HOME_BOUNDS = dataBounds(hexData);
+let HOME_BOUNDS = dataBounds(hexData);
 const FIT = { padding: 30, animate: false };
 
 // Only genuine input counts: camera events carry an originalEvent when the user
@@ -70,7 +83,7 @@ for (const ev of ['dragstart', 'zoomstart', 'rotatestart']) {
 }
 
 /**
- * Re-frame London, unless the view came from the URL or the user has taken
+ * Re-frame the city, unless the view came from the URL or the user has taken
  * over. A fit is only as good as the container size it was measured against,
  * and that size is often wrong until well after startup.
  */
@@ -269,10 +282,69 @@ map.on('mouseout', () => {
 // A postcode lookup flies the camera programmatically, which carries no
 // originalEvent — without this a later window resize would re-frame London and
 // throw away the place the user just looked up.
-initSearch(map, hexProps, districts, () => {
+// Mutated in place by switchCity, so the search handlers always see the
+// city currently on screen without being re-bound (which would double up
+// their event listeners).
+const searchCtx = { hexProps, districts, cityName: summary.city };
+initSearch(map, searchCtx, () => {
   hasUserMoved = true;
 });
 initFindings(summary);
+
+// --- City switcher ---
+const cityBar = document.getElementById('cities');
+
+/** Swap every per-city dataset in place, then re-frame the map. */
+async function switchCity(slug) {
+  if (slug === city || !CITIES.includes(slug)) return;
+  cityBar.setAttribute('aria-busy', 'true');
+
+  const [hex, sum, poi, dist] = await cityFiles(slug);
+  city = slug;
+
+  map.getSource('hexes').setData(hex);
+  map.getSource('pois').setData(poi);
+  hexProps = new Map(hex.features.map((f) => [f.properties.h3, f.properties]));
+  searchCtx.hexProps = hexProps;
+  searchCtx.districts = dist;
+  searchCtx.cityName = sum.city;
+
+  // The Banana is a London claim; offering it over Manchester would be
+  // meaningless, so the control goes away with the city.
+  const bananaRow = document.getElementById('toggle-banana').closest('.toggle');
+  const bananaOn = document.getElementById('toggle-banana');
+  bananaRow.hidden = slug !== 'london';
+  if (slug !== 'london' && bananaOn.checked) {
+    bananaOn.checked = false;
+    bananaOn.dispatchEvent(new Event('change'));
+  }
+
+  initFindings(sum);
+  document.getElementById('result').hidden = true;
+
+  // A new city means the old view is meaningless, so re-frame regardless of
+  // whether the user had panned around the previous one.
+  HOME_BOUNDS = dataBounds(hex);
+  hasUserMoved = false;
+  // Jump, don't animate. Animated moves are driven by the render loop, so a
+  // stalled basemap leaves the camera stranded mid-flight — and flying 200
+  // miles between cities is disorienting rather than informative anyway.
+  map.fitBounds(HOME_BOUNDS, FIT);
+
+  for (const b of cityBar.querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.city === slug));
+  }
+  const url = new URL(location.href);
+  url.searchParams.set('city', slug);
+  history.replaceState(null, '', url);
+  cityBar.removeAttribute('aria-busy');
+}
+
+for (const b of cityBar.querySelectorAll('button')) {
+  b.setAttribute('aria-pressed', String(b.dataset.city === city));
+  b.addEventListener('click', () => switchCity(b.dataset.city));
+}
+document.getElementById('toggle-banana').closest('.toggle').hidden = city !== 'london';
 
 map.on('error', (e) => console.warn('map error:', e.error?.message ?? e));
 

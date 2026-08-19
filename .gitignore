@@ -13,3 +13,7 @@ dist/
 __pycache__/
 *.egg-info/
 .DS_Store
+
+# Per-city Overture extracts are large (36 MB for London alone); CI re-queries
+# S3 for them rather than carrying ~100 MB of caches in the repo.
+data/raw/overture_pois_*.parquet

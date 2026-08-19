@@ -12,10 +12,18 @@ export function initFindings(summary) {
     `<strong>Coffee costs more.</strong> Coffee-leaning areas sell higher ` +
     `(ρ = ${summary.spearman_rho.toFixed(2)}, ${summary.corr_n.toLocaleString()} hexes).`;
 
-  if (a?.rho15 == null) return;
-
-  const growth = document.createElement('div');
-  growth.id = 'corr-growth';
+  // Reuse the node rather than appending: this runs again on every city
+  // switch, and stats.after() would stack a fresh paragraph each time.
+  let growth = document.getElementById('corr-growth');
+  if (a?.rho15 == null) {
+    growth?.remove();
+    return;
+  }
+  if (!growth) {
+    growth = document.createElement('div');
+    growth.id = 'corr-growth';
+    stats.after(growth);
+  }
   growth.title =
     `Raw correlation with ${a.y0}–now growth is ${a.rho15.toFixed(2)}, but cheap areas ` +
     `multiply faster from a low base. Same story on a ${a.y0_short} baseline: ` +
@@ -24,5 +32,4 @@ export function initFindings(summary) {
     `<strong>But it doesn't predict growth.</strong> Net of what an area cost in ` +
     `${a.y0}, the index says nothing about what happened next ` +
     `(ρ = ${a.partial15 >= 0 ? '+' : ''}${a.partial15.toFixed(2)}, p = ${p(a.partial15_p)}).`;
-  stats.after(growth);
 }

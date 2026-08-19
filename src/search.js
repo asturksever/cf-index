@@ -15,7 +15,9 @@ function valueVerdict(v) {
   return 'you are paying for something other than the coffee';
 }
 
-export function initSearch(map, hexProps, districts, onTakeOver = () => {}) {
+// `ctx` is mutated in place when the city changes, so the handlers below always
+// read the live city rather than whatever was current when they were bound.
+export function initSearch(map, ctx, onTakeOver = () => {}) {
   const form = document.getElementById('search');
   const input = document.getElementById('pc-input');
   const result = document.getElementById('result');
@@ -31,19 +33,20 @@ export function initSearch(map, hexProps, districts, onTakeOver = () => {}) {
 
   let marker = null;
 
-  /** Draw the district's price history, falling back to the London-wide series. */
+  /** Draw the district's price history, falling back to the city-wide series. */
   function showHistory(outcode) {
+    const { districts, cityName } = ctx;
     const own = districts?.[outcode];
-    const d = own ?? districts?._london;
+    const d = own ?? districts?._city;
     const svg = d ? sparkline(d.m, d.y0) : '';
     if (!svg) {
       history.hidden = true;
       return;
     }
     spark.innerHTML = svg;
-    const scope = own ? outcode : 'London-wide';
+    const scope = own ? outcode : `${cityName}-wide`;
     historyNote.textContent = own?.mult15
-      ? `${outcode}: ${own.mult15}× since ${d.y0} — ${ordinal(own.rank15)} fastest of ${districts._meta.n_ranked} London districts`
+      ? `${outcode}: ${own.mult15}× since ${d.y0} — ${ordinal(own.rank15)} fastest of ${districts._meta.n_ranked} ${cityName} districts`
       : `${scope} median since ${d.y0}${d.mult15 ? ` — ${d.mult15}× overall` : ''}`;
     history.hidden = false;
   }
@@ -87,13 +90,13 @@ export function initSearch(map, hexProps, districts, onTakeOver = () => {}) {
 
     const { latitude: lat, longitude: lng, admin_district } = data;
     const cell = latLngToCell(lat, lng, RES);
-    const p = hexProps.get(cell);
+    const p = ctx.hexProps.get(cell);
 
     if (!p) {
       showMessage(
         data.postcode,
-        admin_district && !LONDON_BOROUGHS.has(admin_district)
-          ? `${admin_district} is outside Greater London — this index stops at the M25 (ish).`
+        admin_district
+          ? `${admin_district} is outside ${ctx.cityName}. This map covers London, Manchester and Liverpool — try the city switcher.`
           : 'No index here — fewer than two coffee or chicken shops within a couple of hexes.',
       );
       return;
@@ -101,10 +104,10 @@ export function initSearch(map, hexProps, districts, onTakeOver = () => {}) {
 
     const v = verdictFor(p.score);
     title.textContent = `${data.postcode} · ${admin_district ?? ''}`;
-    // "Nth percentile" rather than "more coffee-leaning than N%": a quarter of
-    // London ties at the maximum score, so a strict "more than" claim would
-    // overstate what the shared rank actually means.
-    verdict.textContent = `${v.label} — ${p.score > 0 ? '+' : ''}${p.score.toFixed(2)}, ${ordinal(p.pct)} percentile London-wide`;
+    // "Nth percentile" rather than "more coffee-leaning than N%": a large block
+    // ties at the maximum score, so a strict "more than" claim would overstate
+    // what the shared rank actually means.
+    verdict.textContent = `${v.label} — ${p.score > 0 ? '+' : ''}${p.score.toFixed(2)}, ${ordinal(p.pct)} percentile ${ctx.cityName}-wide`;
     verdict.style.color = v.color;
     meterDot.parentElement.hidden = false;
     meterDot.style.left = `${((p.score + 1) / 2) * 100}%`;
@@ -124,14 +127,3 @@ export function initSearch(map, hexProps, districts, onTakeOver = () => {}) {
     map.flyTo({ center: [lng, lat], zoom: 13.2, duration: 2200 });
   });
 }
-
-// districts postcodes.io reports for Greater London postcodes
-const LONDON_BOROUGHS = new Set([
-  'Barking and Dagenham', 'Barnet', 'Bexley', 'Brent', 'Bromley', 'Camden',
-  'City of London', 'Croydon', 'Ealing', 'Enfield', 'Greenwich', 'Hackney',
-  'Hammersmith and Fulham', 'Haringey', 'Harrow', 'Havering', 'Hillingdon',
-  'Hounslow', 'Islington', 'Kensington and Chelsea', 'Kingston upon Thames',
-  'Lambeth', 'Lewisham', 'Merton', 'Newham', 'Redbridge', 'Richmond upon Thames',
-  'Southwark', 'Sutton', 'Tower Hamlets', 'Waltham Forest', 'Wandsworth',
-  'Westminster',
-]);
