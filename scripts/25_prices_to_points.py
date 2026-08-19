@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
 """Turn Land Registry Price Paid CSVs into the two tables the index needs.
 
-1. data/build/sales.parquet — recent (2023+) Greater London sales geocoded to
+1. <build>/sales.parquet — recent (2023+) sales for the city, geocoded to
    lat/lon via OS Code-Point Open, for the per-hex median price.
-2. data/build/district_series.parquet — every year since 2011 aggregated to
+2. <build>/district_series.parquet — every year since 2011 aggregated to
    postcode district (outcode) medians, for the historical comparison. No
    geocoding needed here: the outcode is the first half of the postcode.
+
+The CSVs are national, so a new city costs no new download — only a different
+county filter over files already on disk.
 """
 
+import sys
 from pathlib import Path
 
 import duckdb
 import numpy as np
 from pyproj import Transformer
 
+sys.path.insert(0, str(Path(__file__).parent))
+from cities import build_dir, parse_city  # noqa: E402
+
 PPD_GLOB = "data/raw/pp-*.csv"
 CPO_GLOB = "data/raw/codepo_gb/Data/CSV/*.csv"
-OUT_SALES = Path("data/build/sales.parquet")
-OUT_SERIES = Path("data/build/district_series.parquet")
 
-# Hex medians describe the London of the POI snapshot, so they stay recent.
+# Hex medians describe the city of the POI snapshot, so they stay recent.
 # The district series deliberately reaches back much further.
 RECENT_FROM = "2023-01-01"
 SERIES_FROM = 2011
@@ -33,6 +38,10 @@ PPD_COLUMNS = [
 
 
 def main() -> None:
+    slug, cfg = parse_city()
+    out_sales = build_dir(slug) / "sales.parquet"
+    out_series = build_dir(slug) / "district_series.parquet"
+
     con = duckdb.connect()
     ppd_cols = ", ".join(f"'{c}': 'VARCHAR'" for c in PPD_COLUMNS)
 
@@ -50,7 +59,7 @@ def main() -> None:
         -- schema. Reading everything as text and casting explicitly is the
         -- only way to stay immune to per-year formatting drift.
         FROM read_csv('{PPD_GLOB}', header=false, columns={{{ppd_cols}}}, auto_detect=false)
-        WHERE county = 'GREATER LONDON'
+        WHERE county = '{cfg['ppd_county']}'
           AND ppd_category = 'A'
           AND postcode IS NOT NULL AND postcode <> ''
         """
@@ -59,9 +68,11 @@ def main() -> None:
         "SELECT count(*), count(DISTINCT outcode) FROM sales_all"
     ).fetchone()
     yr_lo, yr_hi = con.execute("SELECT min(year), max(year) FROM sales_all").fetchone()
-    print(f"London category-A sales {yr_lo}–{yr_hi}: {n_all:,} across {n_oc} outcodes")
-    if not 200 <= n_oc <= 400:
-        raise SystemExit(f"{n_oc} outcodes is outside the plausible London range")
+    print(f"{cfg['name']} category-A sales {yr_lo}–{yr_hi}: {n_all:,} across {n_oc} outcodes")
+    # Wide band: this has to hold for Merseyside as well as Greater London, so
+    # it only catches a wrong county filter, not a merely smaller city.
+    if not 20 <= n_oc <= 500:
+        raise SystemExit(f"{n_oc} outcodes is implausible — check the county filter")
 
     # --- 1. recent geocoded sales ---
     con.execute(
@@ -98,22 +109,23 @@ def main() -> None:
 
     med = df["price"].median()
     print(f"median recent sale price: £{med:,.0f}")
-    if not 300_000 < med < 900_000:
-        raise SystemExit("median London price outside plausible band — check filters")
+    # Wide enough to span Merseyside and Greater London; only catches a filter
+    # that has gone badly wrong, not a city that is simply cheaper.
+    if not 80_000 < med < 2_000_000:
+        raise SystemExit("median price outside plausible band — check filters")
 
-    OUT_SALES.parent.mkdir(parents=True, exist_ok=True)
-    df[["price", "date", "outcode", "lon", "lat"]].to_parquet(OUT_SALES, index=False)
-    print(f"wrote {OUT_SALES}")
+    df[["price", "date", "outcode", "lon", "lat"]].to_parquet(out_sales, index=False)
+    print(f"wrote {out_sales}")
 
-    # --- 2. district-year series (+ trailing-12m and London-wide rows) ---
+    # --- 2. district-year series (+ trailing-12m and city-wide rows) ---
     series = con.execute(
         f"""
         WITH yearly AS (
           SELECT outcode, year, CAST(median(price) AS BIGINT) AS med, count(*) AS n
           FROM sales_all WHERE year >= {SERIES_FROM} GROUP BY 1, 2
         ),
-        london_yearly AS (
-          SELECT '_london' AS outcode, year, CAST(median(price) AS BIGINT) AS med, count(*) AS n
+        city_yearly AS (
+          SELECT '_city' AS outcode, year, CAST(median(price) AS BIGINT) AS med, count(*) AS n
           FROM sales_all WHERE year >= {SERIES_FROM} GROUP BY 2
         ),
         recent AS (
@@ -123,23 +135,23 @@ def main() -> None:
           WHERE date >= strftime(current_date - INTERVAL 365 DAY, '%Y-%m-%d')
           GROUP BY 1
         ),
-        london_recent AS (
-          SELECT '_london' AS outcode, {RECENT_YEAR_SENTINEL} AS year,
+        city_recent AS (
+          SELECT '_city' AS outcode, {RECENT_YEAR_SENTINEL} AS year,
                  CAST(median(price) AS BIGINT) AS med, count(*) AS n
           FROM sales_all
           WHERE date >= strftime(current_date - INTERVAL 365 DAY, '%Y-%m-%d')
         )
         SELECT * FROM yearly
-        UNION ALL SELECT * FROM london_yearly
+        UNION ALL SELECT * FROM city_yearly
         UNION ALL SELECT * FROM recent
-        UNION ALL SELECT * FROM london_recent
+        UNION ALL SELECT * FROM city_recent
         """
     ).df()
     con.close()
 
-    series.to_parquet(OUT_SERIES, index=False)
+    series.to_parquet(out_series, index=False)
     n_recent_rows = int((series["year"] == RECENT_YEAR_SENTINEL).sum())
-    print(f"wrote {OUT_SERIES} ({len(series):,} rows, {n_recent_rows} trailing-12m aggregates)")
+    print(f"wrote {out_series} ({len(series):,} rows, {n_recent_rows} trailing-12m aggregates)")
 
 
 if __name__ == "__main__":

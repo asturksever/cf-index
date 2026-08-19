@@ -22,6 +22,32 @@ layers, a **price-growth mode** tinting each hex by how much its postcode
 district's median sale price has multiplied since 2011, and a **value-spots
 mode**.
 
+### Three cities
+
+The index now covers **London, Manchester and Liverpool**
+([#5](https://github.com/asturksever/cf-index/issues/5)). Adding a city costs
+one OSM relation id and one Price Paid county name in `scripts/cities.py` — the
+Land Registry CSVs are national, so the price side needs no new download at
+all, and every script takes `--city <slug>`.
+
+| | hexes | coffee | chicken | index × price (ρ) |
+|---|---|---|---|---|
+| London | 8,628 | 10,873 | 1,527 | **+0.39** |
+| Manchester | 3,001 | 2,611 | 381 | +0.22 |
+| Liverpool | 1,448 | 1,310 | 103 | +0.23 |
+
+**The index is a much weaker signal outside London** — roughly half the
+correlation with price. The mean-reversion finding holds in all three: the raw
+correlation with price growth is negative everywhere, and net of the starting
+price level it is indistinguishable from zero.
+
+Liverpool is the outlier on shop mix: one chicken shop per 12.7 coffee shops,
+against 1:7.1 in London and 1:6.8 in Manchester. Some of that was a classifier
+gap — the original name list was all London chains (Morley's, Chicken Cottage)
+— now fixed with a general `chicken` rule plus northern chains like Chesters.
+The rest looks real: Merseyside's takeaway high street leans to bakeries and
+chip shops rather than fried chicken.
+
 ### Value spots
 
 A modern rerun of [Londonist's 2015 coffee-and-chicken

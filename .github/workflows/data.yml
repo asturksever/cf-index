@@ -41,15 +41,21 @@ jobs:
 
       - name: Run pipeline
         run: |
-          python scripts/15_fetch_boundary.py
-          if [ "${{ inputs.refresh_pois }}" = "true" ]; then
-            python scripts/10_fetch_pois.py --refresh
-          else
-            python scripts/10_fetch_pois.py
-          fi
+          # The Price Paid CSVs are national, so they are fetched once and every
+          # city is just a different filter over them.
           ./scripts/20_fetch_prices.sh
-          python scripts/25_prices_to_points.py
-          python scripts/30_build_index.py
+          for city in london manchester liverpool; do
+            echo "::group::$city"
+            python scripts/15_fetch_boundary.py --city "$city"
+            if [ "${{ inputs.refresh_pois }}" = "true" ]; then
+              python scripts/10_fetch_pois.py --city "$city" --refresh
+            else
+              python scripts/10_fetch_pois.py --city "$city"
+            fi
+            python scripts/25_prices_to_points.py --city "$city"
+            python scripts/30_build_index.py --city "$city"
+            echo "::endgroup::"
+          done
 
       - name: Commit rebuilt data
         run: |
