@@ -341,6 +341,12 @@ body {
   cursor: pointer;
 }
 
+/* `display: flex` above outranks the UA's [hidden] { display: none }, so
+   hiding a row from JS silently did nothing without this. */
+.toggle[hidden] {
+  display: none;
+}
+
 .toggle input {
   width: 16px;
   height: 16px;
