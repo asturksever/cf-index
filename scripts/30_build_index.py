@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the Coffee–Fried Chicken Index hex grid, price history and correlations.
 
-- H3 res-9 grid over the Greater London boundary
+- H3 res-9 grid seeded from the POIs (only cells within smoothing reach)
 - Gaussian k-ring smoothing of POI counts (σ=1 in hex-distance units, k≤2)
 - score = (coffee − chicken) / (coffee + chicken) on smoothed counts, in [−1, 1]
 - median sale price per hex (sales pooled over grid_disk k=1, n ≥ MIN_SALES)
@@ -9,7 +9,7 @@
 - correlations: score vs current price, and score vs district growth over both
   a 15-year and a 10-year window
 
-Outputs public/data/{hexes.geojson,pois.geojson,districts.json,summary.json}.
+Outputs <public>/{hexes.json,pois.geojson,districts.json,summary.json}.
 """
 
 import json
@@ -23,12 +23,17 @@ import h3
 import numpy as np
 import pandas as pd
 from scipy import stats
-from shapely.geometry import shape
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cities import boundary_path, build_dir, parse_city, public_dir  # noqa: E402
+from cities import build_dir, parse_city, public_dir  # noqa: E402
 
 RES = 9
+# A res-9 hex is ~174 m across, which is a tenth of a pixel at national zoom —
+# the country-wide view renders as blank map without a coarser tier. Res 6
+# (~36 km², roughly a town) is scored from the same POI counts, not by
+# averaging res-9 scores, so it is the same metric at a different grain.
+COARSE_RES = 6
+COARSE_MIN_SHOPS = 3  # a whole town on 2 shops is noise, not a reading
 SMOOTH_W = {0: 1.0, 1: math.exp(-0.5), 2: math.exp(-2.0)}  # gaussian σ=1 by grid distance
 MIN_MASS = 1.5   # min weighted POI mass for a hex to get a score
 MIN_SALES = 8    # min pooled sales for a hex to get a median price
@@ -85,16 +90,27 @@ def build_districts(this_year: int, series_path: Path) -> dict:
 def main() -> None:
     slug, cfg = parse_city()
     build, public = build_dir(slug), public_dir(slug)
-    out_hex = public / "hexes.geojson"
+    out_hex = public / "hexes.json"
     out_pois = public / "pois.geojson"
     this_year = date.today().year
-    boundary = json.loads(boundary_path(slug).read_text())
-    # sorted, not a raw set: keeps feature order (and therefore the committed
-    # GeoJSON) byte-identical across runs when the inputs have not changed
-    cells = sorted(set(h3.h3shape_to_cells(h3.geo_to_h3shape(boundary), RES)))
-    print(f"grid: {len(cells):,} res-{RES} cells")
-
     pois = pd.read_parquet(build / "pois.parquet")
+
+    # Candidate cells come from the POIs, not from filling the boundary. Only a
+    # cell within SMOOTH_W's reach of a shop can ever score, and filling the
+    # whole UK at res 9 would enumerate ~2.3M cells to score maybe 40k of them.
+    # This also means the national build needs no boundary polygon fill at all.
+    seeds = {
+        h3.latlng_to_cell(lat, lon, RES)
+        for lat, lon in zip(pois["lat"], pois["lon"])
+    }
+    reach = max(SMOOTH_W)
+    cells = set()
+    for seed in seeds:
+        cells.update(h3.grid_disk(seed, reach))
+    # sorted, not a raw set: keeps feature order (and therefore the committed
+    # output) byte-identical across runs when the inputs have not changed
+    cells = sorted(cells)
+    print(f"grid: {len(cells):,} res-{RES} cells from {len(seeds):,} occupied cells")
     counts = {"coffee": Counter(), "chicken": Counter()}
     for kind, lat, lon in zip(pois["kind"], pois["lat"], pois["lon"]):
         counts[kind][h3.latlng_to_cell(lat, lon, RES)] += 1
@@ -189,6 +205,24 @@ def main() -> None:
         f"pearson(log) r={pearson.statistic:.3f}  spearman ρ={spearman.statistic:.3f}"
     )
 
+    # Scale diagnostic. Nationally the score-vs-price link all but vanishes,
+    # because at UK scale the index separates town from countryside rather than
+    # rich from poor: a village with two cafes and no chicken shop scores the
+    # same +1 as Chelsea. Restricting to dense high streets recovers it, which
+    # confirms this is a within-city pattern rather than a national one. The UI
+    # states both numbers instead of leading with the flattering one.
+    DENSE_MASS = 20.0
+    dense = [
+        (r["score"], r["price"])
+        for r in scored.values()
+        if r["price"] and (r["cs"] + r["fs"]) >= DENSE_MASS
+    ]
+    if len(dense) >= 50:
+        d_rho = float(stats.spearmanr(*zip(*dense)).statistic)
+        print(f"dense-only (mass>={DENSE_MASS:g}): spearman rho={d_rho:.3f} (n={len(dense):,})")
+    else:
+        d_rho = None
+
     # correlation: district mean score vs district growth, both windows.
     # Aggregating score up to the district keeps n honest (~250, not ~8,500).
     dist_scores = defaultdict(list)
@@ -260,25 +294,45 @@ def main() -> None:
     idx = rng.choice(len(qual), size=min(SCATTER_MAX, len(qual)), replace=False)
     scatter = [[round(float(xs[i]), 3), int(ys[i])] for i in sorted(idx)]
 
-    # emit hex geojson
-    features = []
-    for cell, r in scored.items():
-        ring = [[round(lng, 5), round(lat, 5)] for lat, lng in h3.cell_to_boundary(cell)]
-        ring.append(ring[0])
-        # Drop null-valued props rather than emitting `"apprec": null`: MapLibre
-        # cannot compare an expression against null, so ['has', ...] is the only
-        # workable no-data test in a paint expression. Smaller file, too.
-        props = {"h3": cell, **{k: v for k, v in r.items() if v is not None}}
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": {"type": "Polygon", "coordinates": [ring]},
-                "properties": props,
-            }
-        )
+    # Emit H3 ids + properties, NOT polygon geometry. Each ring is 7 coordinate
+    # pairs of pure boilerplate that h3-js can regenerate from the id in the
+    # browser, and at national scale that boilerplate is ~80% of the payload.
+    # Drop null-valued props rather than emitting `"apprec": null`: MapLibre
+    # cannot compare an expression against null, so ['has', ...] is the only
+    # workable no-data test in a paint expression.
     out_hex.write_text(
-        json.dumps({"type": "FeatureCollection", "features": features}, separators=(",", ":"))
+        json.dumps(
+            {
+                "res": RES,
+                "hexes": [
+                    {"h3": cell, **{k: v for k, v in r.items() if v is not None}}
+                    for cell, r in scored.items()
+                ],
+            },
+            separators=(",", ":"),
+        )
     )
+
+    # Coarse tier for the zoomed-out view.
+    coarse_counts = {}
+    for kind, lat, lon in zip(pois["kind"], pois["lat"], pois["lon"]):
+        cell = h3.latlng_to_cell(lat, lon, COARSE_RES)
+        rec = coarse_counts.setdefault(cell, {"c": 0, "f": 0})
+        rec["c" if kind == "coffee" else "f"] += 1
+    coarse = [
+        {
+            "h3": cell,
+            "c": rec["c"],
+            "f": rec["f"],
+            "score": round((rec["c"] - rec["f"]) / (rec["c"] + rec["f"]), 3),
+        }
+        for cell, rec in sorted(coarse_counts.items())
+        if rec["c"] + rec["f"] >= COARSE_MIN_SHOPS
+    ]
+    (public / "hexes_coarse.json").write_text(
+        json.dumps({"res": COARSE_RES, "hexes": coarse}, separators=(",", ":"))
+    )
+    print(f"coarse tier: {len(coarse):,} res-{COARSE_RES} cells")
 
     # emit raw POI points for the density heatmaps
     kmap = {"coffee": "c", "chicken": "f"}
@@ -329,6 +383,11 @@ def main() -> None:
             "city_mult15": districts.get("_city", {}).get("mult15"),
         },
         "top_value": top_value,
+        "scale": {
+            "rho_dense": None if d_rho is None else round(d_rho, 3),
+            "n_dense": len(dense),
+            "dense_mass": DENSE_MASS,
+        },
         "scatter": scatter,
     }
     (public / "summary.json").write_text(json.dumps(summary, separators=(",", ":")))
@@ -339,8 +398,10 @@ def main() -> None:
         f"wrote {out_hex} ({hex_mb:.1f} MB), {out_pois} ({poi_mb:.1f} MB), "
         f"{public}/districts.json, {public}/summary.json"
     )
-    if hex_mb > 5:
-        print("WARNING: hexes.geojson larger than expected")
+    # National builds are legitimately bigger than a city; the browser fetches
+    # this once and gzip roughly quarters it.
+    if hex_mb > 12:
+        print(f"WARNING: {out_hex.name} larger than expected ({hex_mb:.1f} MB)")
 
 
 if __name__ == "__main__":

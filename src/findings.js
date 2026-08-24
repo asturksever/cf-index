@@ -8,9 +8,24 @@ export function initFindings(summary) {
   const a = summary.apprec;
   const p = (v) => (v > 0.01 ? v.toFixed(2) : v.toExponential(0));
 
-  stats.innerHTML =
-    `<strong>Coffee costs more.</strong> Coffee-leaning areas sell higher ` +
-    `(ρ = ${summary.spearman_rho.toFixed(2)}, ${summary.corr_n.toLocaleString()} hexes).`;
+  const sc = summary.scale;
+  // Nationally the headline correlation is ~0, so leading with "coffee costs
+  // more" would be false at this scale. Say what the number actually is.
+  if (sc?.rho_dense != null && Math.abs(summary.spearman_rho) < 0.15) {
+    stats.innerHTML =
+      `<strong>This is a city pattern, not a national one.</strong> Across ` +
+      `${summary.city} the link between coffee and price all but vanishes ` +
+      `(ρ = ${summary.spearman_rho.toFixed(2)}, ` +
+      `${summary.corr_n.toLocaleString()} hexes): the score mostly separates town from ` +
+      `countryside, and a village with two cafés and no chicken shop scores the same ` +
+      `+1 as Chelsea. On busy high streets it returns ` +
+      `(ρ = ${sc.rho_dense.toFixed(2)}, ${sc.n_dense.toLocaleString()} hexes), and inside ` +
+      `London alone it reaches 0.39.`;
+  } else {
+    stats.innerHTML =
+      `<strong>Coffee costs more.</strong> Coffee-leaning areas sell higher ` +
+      `(ρ = ${summary.spearman_rho.toFixed(2)}, ${summary.corr_n.toLocaleString()} hexes).`;
+  }
 
   // Reuse the node rather than appending: this runs again on every city
   // switch, and stats.after() would stack a fresh paragraph each time.

@@ -44,7 +44,7 @@ jobs:
           # The Price Paid CSVs are national, so they are fetched once and every
           # city is just a different filter over them.
           ./scripts/20_fetch_prices.sh
-          for city in london manchester liverpool; do
+          for city in engwales; do
             echo "::group::$city"
             python scripts/15_fetch_boundary.py --city "$city"
             if [ "${{ inputs.refresh_pois }}" = "true" ]; then

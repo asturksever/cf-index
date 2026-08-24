@@ -11,24 +11,27 @@ import json
 from pathlib import Path
 
 CITIES = {
+    # England & Wales, not the whole UK, and the reason is the price data.
+    # Price Paid covers England and Wales only: Northern Ireland came back 0%
+    # priced and Scotland 7%, so including them meant a map where half the
+    # layers were blank and every postcode search said "too few sales".
+    # Scotland's register is held by Registers of Scotland on different terms.
+    "engwales": {
+        "name": "England & Wales",
+        "osm_relation": [58447, 58437],  # England, Wales
+        "ppd_county": None,  # no county filter: take every row in the CSVs
+    },
+    # Single-city builds are still supported — handy for iterating on the
+    # classifier without reprocessing the country — but the site ships the
+    # England & Wales build above.
     "london": {
         "name": "London",
         "osm_relation": 175342,  # Greater London
         "ppd_county": "GREATER LONDON",
     },
-    "manchester": {
-        "name": "Manchester",
-        "osm_relation": 88084,  # Greater Manchester
-        "ppd_county": "GREATER MANCHESTER",
-    },
-    "liverpool": {
-        "name": "Liverpool",
-        "osm_relation": 147564,  # Merseyside
-        "ppd_county": "MERSEYSIDE",
-    },
 }
 
-DEFAULT = "london"
+DEFAULT = "engwales"
 
 
 def boundary_path(slug: str) -> Path:

@@ -10,6 +10,7 @@ import sys
 
 import requests
 from shapely.geometry import mapping, shape
+from shapely.ops import unary_union
 from shapely.validation import make_valid
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
@@ -17,9 +18,10 @@ from cities import boundary_path, parse_city  # noqa: E402
 
 URL = "https://polygons.openstreetmap.fr/get_geojson.py?id={rel}&params=0"
 
-# Sanity band in square degrees. Generous, but wide enough to catch fetching a
-# point, a single borough, or the whole country by mistake.
-MIN_AREA_DEG2, MAX_AREA_DEG2 = 0.02, 2.0
+# Sanity band in square degrees. Has to span a metro county (Merseyside, ~0.1)
+# and the whole UK (~57), so it only catches fetching a point or a single
+# borough by mistake, not a legitimately large geography.
+MIN_AREA_DEG2, MAX_AREA_DEG2 = 0.02, 120.0
 
 
 def main() -> None:
@@ -30,12 +32,19 @@ def main() -> None:
         print(f"using cached boundary: {cache}")
         return
 
-    url = URL.format(rel=cfg["osm_relation"])
-    print(f"fetching {cfg['name']} (OSM relation {cfg['osm_relation']})")
-    resp = requests.get(url, timeout=180)
-    resp.raise_for_status()
+    # A geography can be more than one relation (England & Wales is two), so
+    # fetch each and union them into a single polygon.
+    rels = cfg["osm_relation"]
+    rels = rels if isinstance(rels, list) else [rels]
+    print(f"fetching {cfg['name']} (OSM relation{'s' if len(rels) > 1 else ''} {rels})")
 
-    geom = make_valid(shape(resp.json()))
+    parts = []
+    for rel in rels:
+        resp = requests.get(URL.format(rel=rel), timeout=300)
+        resp.raise_for_status()
+        parts.append(make_valid(shape(resp.json())))
+    geom = parts[0] if len(parts) == 1 else unary_union(parts)
+    geom = make_valid(geom)
     if geom.geom_type == "GeometryCollection":
         polys = [g for g in geom.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
         if not polys:

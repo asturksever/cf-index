@@ -44,6 +44,12 @@ def main() -> None:
 
     con = duckdb.connect()
     ppd_cols = ", ".join(f"'{c}': 'VARCHAR'" for c in PPD_COLUMNS)
+    # A national build takes every row; a city build filters to its county.
+    # Price Paid is England & Wales only either way — Scotland and Northern
+    # Ireland keep their index hexes but get no price layers.
+    county_filter = (
+        "" if cfg["ppd_county"] is None else f"county = '{cfg['ppd_county']}' AND"
+    )
 
     con.execute(
         f"""
@@ -59,8 +65,8 @@ def main() -> None:
         -- schema. Reading everything as text and casting explicitly is the
         -- only way to stay immune to per-year formatting drift.
         FROM read_csv('{PPD_GLOB}', header=false, columns={{{ppd_cols}}}, auto_detect=false)
-        WHERE county = '{cfg['ppd_county']}'
-          AND ppd_category = 'A'
+        WHERE {county_filter}
+          ppd_category = 'A'
           AND postcode IS NOT NULL AND postcode <> ''
         """
     )
@@ -71,7 +77,8 @@ def main() -> None:
     print(f"{cfg['name']} category-A sales {yr_lo}–{yr_hi}: {n_all:,} across {n_oc} outcodes")
     # Wide band: this has to hold for Merseyside as well as Greater London, so
     # it only catches a wrong county filter, not a merely smaller city.
-    if not 20 <= n_oc <= 500:
+    max_oc = 3500 if cfg["ppd_county"] is None else 500
+    if not 20 <= n_oc <= max_oc:
         raise SystemExit(f"{n_oc} outcodes is implausible — check the county filter")
 
     # --- 1. recent geocoded sales ---
