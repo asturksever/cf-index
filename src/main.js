@@ -285,7 +285,14 @@ map.on('mouseout', () => {
 // Mutated in place by switchCity, so the search handlers always see the
 // city currently on screen without being re-bound (which would double up
 // their event listeners).
-const searchCtx = { hexProps, districts, cityName: summary.city };
+const searchCtx = {
+  hexProps,
+  districts,
+  cityName: summary.city,
+  // The Banana never changes with the city; the checkbox (hidden and force-
+  // unchecked outside London) is the gate, so the ring can just sit here.
+  bananaRing: bananaData.features[0].geometry.coordinates[0],
+};
 initSearch(map, searchCtx, () => {
   hasUserMoved = true;
 });

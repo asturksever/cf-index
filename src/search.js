@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import { latLngToCell } from 'h3-js';
 import { verdictFor, formatPrice, ordinal } from './verdict.js';
 import { sparkline } from './sparkline.js';
+import { insideBanana } from './banana.js';
 
 const RES = 9;
 
@@ -30,8 +31,40 @@ export function initSearch(map, ctx, onTakeOver = () => {}) {
   const history = document.getElementById('result-history');
   const spark = document.getElementById('result-spark');
   const historyNote = document.getElementById('result-history-note');
+  const banana = document.getElementById('result-banana');
+  const bananaNote = document.getElementById('result-banana-note');
 
   let marker = null;
+
+  /** Clear any Banana verdict so it never survives into the next result. */
+  function resetBanana() {
+    banana.hidden = true;
+    bananaNote.hidden = true;
+    bananaNote.textContent = '';
+    bananaNote.classList.remove('inside');
+  }
+
+  /**
+   * The Banana verdict, gated exactly as requested: only when the Banana layer
+   * is switched on. The toggle is hidden and force-unchecked outside London,
+   * so the gate is city-safe for free. Read at search time — flipping the
+   * toggle afterwards applies to the next search.
+   */
+  function showBananaVerdict(lng, lat) {
+    resetBanana();
+    if (!document.getElementById('toggle-banana')?.checked) return;
+    if (!ctx.bananaRing) return;
+    // The freehand source stroke is ~1-2 km wide, so this is an indicative
+    // call, not a survey — the copy claims no more than in/out.
+    if (insideBanana(lng, lat, ctx.bananaRing)) {
+      banana.hidden = false;
+      bananaNote.textContent = 'Inside the London Banana';
+      bananaNote.classList.add('inside');
+    } else {
+      bananaNote.textContent = 'Outside the London Banana';
+    }
+    bananaNote.hidden = false;
+  }
 
   /** Draw the district's price history, falling back to the city-wide series. */
   function showHistory(outcode) {
@@ -59,6 +92,7 @@ export function initSearch(map, ctx, onTakeOver = () => {}) {
     detail.textContent = '';
     price.textContent = '';
     history.hidden = true;
+    resetBanana();
     result.hidden = false;
   }
 
@@ -119,6 +153,7 @@ export function initSearch(map, ctx, onTakeOver = () => {}) {
       price.textContent += ` · ${valueVerdict(p.value)}`;
     }
     showHistory(data.outcode);
+    showBananaVerdict(lng, lat);
     result.hidden = false;
 
     marker?.remove();

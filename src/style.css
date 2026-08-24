@@ -259,9 +259,62 @@ body {
 
 /* --- Price history sparkline in the postcode card --- */
 #result-history {
+  position: relative; /* the Banana perches over the sparkline */
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid rgba(51, 48, 43, 0.12);
+}
+
+/* The Banana verdict: an animated banana sitting on top of the price graph
+   when the searched postcode falls inside the crescent. */
+#result-banana {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  z-index: 1;
+  font-size: 20px;
+  line-height: 1;
+  pointer-events: none;
+  transform-origin: 50% 90%;
+  animation: banana-bob 1.6s ease-in-out infinite;
+}
+
+/* display:inline-block would outrank the UA's [hidden] rule — same trap as
+   the layer toggles (a9bf160). */
+#result-banana[hidden] {
+  display: none;
+}
+
+@keyframes banana-bob {
+  0%,
+  100% {
+    transform: translate(-50%, 0) rotate(-10deg);
+  }
+  50% {
+    transform: translate(-50%, -4px) rotate(10deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #result-banana {
+    animation: none;
+    transform: translate(-50%, 0);
+  }
+}
+
+#result-banana-note {
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+#result-banana-note.inside {
+  color: var(--text);
+  font-weight: 600;
+}
+
+#result-banana-note[hidden] {
+  display: none;
 }
 
 #result-history[hidden] {
