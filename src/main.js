@@ -238,8 +238,41 @@ const MODES = {
 
 const HEX_LAYERS = ['hex-fill', 'hex-outline', 'hex-coarse-fill'];
 
+let modeRetryQueued = false;
+
 function applyHexMode() {
   const mode = Object.keys(MODES).find((m) => document.getElementById(`mode-${m}`).checked);
+
+  // Chrome first — it never depends on the map being ready.
+  legendEl.hidden = !mode;
+  if (mode) {
+    for (const m of Object.keys(MODES)) legendEl.classList.toggle(m, m === mode);
+    legendTitle.textContent = MODES[mode].title;
+    legendLabels.replaceChildren(
+      ...MODES[mode].labels.map((t) => {
+        const span = document.createElement('span');
+        span.textContent = t;
+        return span;
+      }),
+    );
+  }
+
+  // The layers panel is clickable while the national dataset is still loading,
+  // which takes a few seconds. Skipping the paint when the layers do not exist
+  // yet left the legend saying "Price growth" over hexes still painted with the
+  // index ramp, and nothing ever corrected it — so retry instead of dropping
+  // the request. applyHexMode re-guards on each pass, so this self-heals however
+  // long the style takes.
+  if (!map.getLayer('hex-fill')) {
+    if (!modeRetryQueued) {
+      modeRetryQueued = true;
+      map.once('styledata', () => {
+        modeRetryQueued = false;
+        applyHexMode();
+      });
+    }
+    return;
+  }
 
   // No colouring selected means the user switched the hexes off entirely.
   for (const layer of HEX_LAYERS) {
@@ -247,7 +280,6 @@ function applyHexMode() {
       map.setLayoutProperty(layer, 'visibility', mode ? 'visible' : 'none');
     }
   }
-  legendEl.hidden = !mode;
   if (!mode) return;
 
   // Both tiers share the colouring; only the coarse one lacks price-derived
@@ -255,15 +287,6 @@ function applyHexMode() {
   for (const layer of ['hex-fill', 'hex-coarse-fill']) {
     if (map.getLayer(layer)) map.setPaintProperty(layer, 'fill-color', MODES[mode].fill);
   }
-  for (const m of Object.keys(MODES)) legendEl.classList.toggle(m, m === mode);
-  legendTitle.textContent = MODES[mode].title;
-  legendLabels.replaceChildren(
-    ...MODES[mode].labels.map((t) => {
-      const span = document.createElement('span');
-      span.textContent = t;
-      return span;
-    }),
-  );
 }
 
 for (const id of Object.keys(MODES)) {
