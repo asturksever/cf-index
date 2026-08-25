@@ -8,8 +8,9 @@ import { verdictFor, formatPrice, ordinal } from './verdict.js';
 
 const DATA_BASE = `${import.meta.env.BASE_URL}data/`;
 
-// Starting point only: unless the URL carries a view, the map immediately fits
-// itself to the data instead, so London fills the window at any screen size.
+// Construction-time camera only; setCamera() re-points it at the chosen view
+// (London unless ?view= says otherwise) as soon as the map exists. Matching
+// London here avoids a visible flash of the wrong part of the country.
 const HOME = { center: [-0.118, 51.5074], zoom: 9.7 };
 
 /** Bounding box of every scored hexagon, as [[w, s], [e, n]]. */
@@ -45,10 +46,13 @@ const VIEWS = {
 
 const DATA_SLUG = 'engwales';
 
-/** View preset from ?view=, defaulting to the whole country. */
+/** View preset from ?view=. London is the default: the index is a
+ *  within-city signal, and nationally it barely correlates with price
+ *  (rho +0.04 against +0.39 in London), so opening on the country would
+ *  lead with the map's weakest reading. "All" stays a click away. */
 function requestedView() {
   const q = new URLSearchParams(location.search).get('view');
-  return q in VIEWS ? q : 'all';
+  return q in VIEWS ? q : 'london';
 }
 
 const cityFiles = (slug) =>
@@ -133,13 +137,30 @@ for (const ev of ['dragstart', 'zoomstart', 'rotatestart']) {
   });
 }
 
+/** Point the camera at a view preset. "all" fits the national extent; every
+ *  other preset is a fixed centre/zoom. Chrome and URL are handled by
+ *  applyView — this is camera only, so the resize refit can reuse it. */
+function setCamera(name) {
+  const preset = VIEWS[name];
+  if (!preset) return;
+  if (name === 'all') {
+    map.fitBounds(HOME_BOUNDS, FIT);
+  } else {
+    // Always jump, never ease. Animated camera moves are driven by the render
+    // loop, so a slow or stalled basemap strands the camera mid-flight — and
+    // these hops cross the country, where an animation is disorienting anyway.
+    map.jumpTo({ center: preset.center, zoom: preset.zoom });
+  }
+}
+
 /**
- * Re-frame the city, unless the view came from the URL or the user has taken
- * over. A fit is only as good as the container size it was measured against,
- * and that size is often wrong until well after startup.
+ * Re-frame the *current* view, unless it came from the URL or the user has
+ * taken over. A fit is only as good as the container size it was measured
+ * against, and that size is often wrong until well after startup — but it has
+ * to re-apply the view on screen, not always snap back to the whole country.
  */
 function refitIfUntouched() {
-  if (!hadSharedView && !hasUserMoved) map.fitBounds(HOME_BOUNDS, FIT);
+  if (!hadSharedView && !hasUserMoved) setCamera(view);
 }
 
 refitIfUntouched();
@@ -358,25 +379,17 @@ initFindings(summary);
 const cityBar = document.getElementById('cities');
 
 function applyView(name) {
-  const preset = VIEWS[name];
-  if (!preset) return;
+  if (!(name in VIEWS)) return;
   view = name;
 
   hasUserMoved = false;
-  if (name === 'all') {
-    map.fitBounds(HOME_BOUNDS, FIT);
-  } else {
-    // Always jump, never ease. Animated camera moves are driven by the render
-    // loop, so a slow or stalled basemap strands the camera mid-flight — and
-    // these hops cross the country, where an animation is disorienting anyway.
-    map.jumpTo({ center: preset.center, zoom: preset.zoom });
-  }
+  setCamera(name);
 
   for (const b of cityBar.querySelectorAll('button')) {
     b.setAttribute('aria-pressed', String(b.dataset.view === name));
   }
   const url = new URL(location.href);
-  if (name === 'all') url.searchParams.delete('view');
+  if (name === 'london') url.searchParams.delete('view');
   else url.searchParams.set('view', name);
   history.replaceState(null, '', url);
 }
@@ -386,13 +399,10 @@ for (const b of cityBar.querySelectorAll('button')) {
   b.addEventListener('click', () => applyView(b.dataset.view));
 }
 
-// Honour ?view= on load. A hash in the URL is a more specific instruction
-// (someone shared an exact camera), so it wins.
-if (view !== 'all' && !hadSharedView) {
-  applyView(view);
-  // Stop the resize-driven refit from yanking the camera back to the full extent.
-  hasUserMoved = true;
-}
+// Point the camera at the starting view. A hash in the URL is a more specific
+// instruction (someone shared an exact camera), so it wins. No hasUserMoved
+// hack needed any more: refitIfUntouched re-applies this same view on resize.
+if (!hadSharedView) setCamera(view);
 
 map.on('error', (e) => console.warn('map error:', e.error?.message ?? e));
 
