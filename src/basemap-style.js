@@ -63,12 +63,16 @@ export const VALUE_FILL = [
     'interpolate',
     ['linear'],
     ['get', 'value'],
+    // Stops track the observed spread, which since value became a *local*
+    // rank is 5th-95th = -0.53..+0.56. The old top stops (0.65, 0.85) were
+    // past the 98th and 99.9th percentile, so two-thirds of the ramp went
+    // unused and even genuine value spots rendered pale.
     -0.5, '#FBFAF7',
     0, '#F0EAF6',
-    0.25, '#D5C2E8',
-    0.45, '#A87FD1',
-    0.65, '#7038B0',
-    0.85, '#3F1D6B',
+    0.2, '#D5C2E8',
+    0.35, '#A87FD1',
+    0.5, '#7038B0',
+    0.7, '#3F1D6B',
   ],
 ];
 

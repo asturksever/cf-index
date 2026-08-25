@@ -319,7 +319,7 @@ function updateInfoCard(point) {
   const v = verdictFor(p.score);
   infoScore.textContent = `${p.score > 0 ? '+' : ''}${p.score.toFixed(2)}`;
   infoScore.style.color = v.color;
-  infoVerdict.textContent = `${v.label} · ${ordinal(p.pct)} percentile`;
+  infoVerdict.textContent = `${v.label} · ${ordinal(p.pct)} percentile locally`;
   infoCounts.textContent = `☕ ${p.c} in hex (${p.cs} nearby) · 🐔 ${p.f} in hex (${p.fs} nearby)`;
   infoPrice.textContent = p.price
     ? `median sale ${formatPrice(p.price)} (${p.n} sales)`

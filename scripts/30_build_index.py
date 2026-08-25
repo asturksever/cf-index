@@ -37,6 +37,11 @@ COARSE_MIN_SHOPS = 3  # a whole town on 2 shops is noise, not a reading
 SMOOTH_W = {0: 1.0, 1: math.exp(-0.5), 2: math.exp(-2.0)}  # gaussian σ=1 by grid distance
 MIN_MASS = 1.5   # min weighted POI mass for a hex to get a score
 MIN_SALES = 8    # min pooled sales for a hex to get a median price
+# Value spots are ranked against a local market, not the country: a res-5
+# parent plus its neighbours is ~1,770 km2, roughly Greater London.
+LOCAL_RES = 5
+LOCAL_RINGS = (1, 2, 3)  # widen until the pool is big enough to rank against
+MIN_POOL = 30
 SCATTER_MAX = 2000
 
 # Two growth windows. 2011 is the headline: it spans the whole 2012–2016 boom
@@ -137,13 +142,6 @@ def main() -> None:
 
     scored = {c: r for c, r in rows.items() if r["score"] is not None}
     svals = np.array([r["score"] for r in scored.values()])
-    # Average ranks for ties. argsort().argsort() would hand equal scores
-    # arbitrary distinct ranks, and since the cell set iterates in a different
-    # order every process, the same hex would report a different percentile on
-    # each build — scores bunch hard near +1, so that hit thousands of hexes.
-    ranks = stats.rankdata(svals, method="average") - 1
-    for (cell, r), rank in zip(scored.items(), ranks):
-        r["pct"] = int(round(100 * rank / max(len(svals) - 1, 1)))
 
     # prices + outcode: sales per cell, pooled over immediate neighbours
     districts = build_districts(this_year, build / "district_series.parquet")
@@ -175,24 +173,65 @@ def main() -> None:
             r["outcode"] = None
             r["apprec"] = None
 
-    # "Value spots" — the Londonist coffee-and-chicken method: places where the
-    # coffee-to-chicken mix already looks gentrified but prices have not caught
-    # up. Both terms are percentile ranks so a £2M outlier cannot swamp the
-    # index, and value = rank(score) - rank(price), i.e. how far a hex's coffee
-    # standing runs ahead of what its prices imply. +1 = best-value.
-    priced = [(c, r) for c, r in scored.items() if r["price"]]
-    if priced:
-        s_rank = stats.rankdata([r["score"] for _, r in priced], method="average")
-        p_rank = stats.rankdata([r["price"] for _, r in priced], method="average")
-        n = len(priced)
-        denom = max(n - 1, 1)
-        for (cell, r), sr, pr in zip(priced, s_rank, p_rank):
-            r["value"] = round(float((sr - pr) / denom), 3)
-        vvals = np.array([r["value"] for _, r in priced])
-        print(
-            "value quantiles:",
-            {q: round(float(np.percentile(vvals, q)), 2) for q in (5, 25, 50, 75, 95)},
-        )
+    # Both the percentile and the value score are ranked against a LOCAL
+    # market, never the country. Nationally, half the map is a village with two
+    # cafes and no chicken shop, which scores a flat +1.0 and saturates the top
+    # of the distribution: London's median came out at the 31st percentile and
+    # the rest of the country's at the 76th. Ranking each hex against its own
+    # surroundings is what makes "76th percentile" mean anything to a reader.
+    #
+    # A market is a res-5 parent plus its ring of neighbours, ~1,770 km2 —
+    # about the size of Greater London, which is the scope these measures had
+    # back when the map only covered London. Overlapping windows mean there is
+    # no hard edge where one comparison group stops and the next starts.
+    def pctile(sorted_vals, v, n):
+        """Percentile of v within a sorted pool, ties sharing the midpoint."""
+        lo = np.searchsorted(sorted_vals, v, side="left")
+        hi = np.searchsorted(sorted_vals, v, side="right")
+        return (lo + hi) / 2 / n
+
+    by_parent = defaultdict(list)
+    for cell, r in scored.items():
+        by_parent[h3.cell_to_parent(cell, LOCAL_RES)].append((cell, r))
+
+    widened = 0
+    for parent, members in by_parent.items():
+        # Widen rather than rank against a handful of neighbours; rural parents
+        # can be nearly empty.
+        for k in LOCAL_RINGS:
+            pool = [x for p in h3.grid_disk(parent, k) for x in by_parent.get(p, ())]
+            if len(pool) >= MIN_POOL:
+                break
+        if k > LOCAL_RINGS[0]:
+            widened += 1
+
+        pool_scores = np.sort(np.array([r["score"] for _, r in pool]))
+        n_all = len(pool)
+        # Value compares two ranks, so both must come from the same population:
+        # the hexes in this market that actually have a price.
+        priced_pool = [r for _, r in pool if r["price"]]
+        pool_pscores = np.sort(np.array([r["score"] for r in priced_pool]))
+        pool_prices = np.sort(np.array([r["price"] for r in priced_pool]))
+        n_priced = len(priced_pool)
+
+        for cell, r in members:
+            r["pct"] = int(round(100 * pctile(pool_scores, r["score"], n_all)))
+            if r["price"] and n_priced >= MIN_POOL:
+                r["value"] = round(
+                    float(
+                        pctile(pool_pscores, r["score"], n_priced)
+                        - pctile(pool_prices, r["price"], n_priced)
+                    ),
+                    3,
+                )
+
+    vvals = np.array([r["value"] for r in scored.values() if r.get("value") is not None])
+    pvals = np.array([r["pct"] for r in scored.values()])
+    print(
+        f"local markets: {len(by_parent)} ({widened} widened) | "
+        f"value q: {{{', '.join(f'{q}: {round(float(np.percentile(vvals, q)), 2)}' for q in (5, 25, 50, 75, 95))}}} | "
+        f"pct median {int(np.median(pvals))}"
+    )
 
     # correlation: score vs current price, per hex
     qual = [(r["score"], r["price"]) for r in scored.values() if r["price"]]

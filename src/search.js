@@ -130,7 +130,7 @@ export function initSearch(map, ctx, onTakeOver = () => {}) {
       showMessage(
         data.postcode,
         admin_district
-          ? `${admin_district} is outside ${ctx.cityName}. This map covers London, Manchester and Liverpool — try the city switcher.`
+          ? `No index for ${admin_district} — either it is outside ${ctx.cityName}, or there are fewer than two coffee or chicken shops nearby.`
           : 'No index here — fewer than two coffee or chicken shops within a couple of hexes.',
       );
       return;
@@ -138,10 +138,12 @@ export function initSearch(map, ctx, onTakeOver = () => {}) {
 
     const v = verdictFor(p.score);
     title.textContent = `${data.postcode} · ${admin_district ?? ''}`;
-    // "Nth percentile" rather than "more coffee-leaning than N%": a large block
-    // ties at the maximum score, so a strict "more than" claim would overstate
-    // what the shared rank actually means.
-    verdict.textContent = `${v.label} — ${p.score > 0 ? '+' : ''}${p.score.toFixed(2)}, ${ordinal(p.pct)} percentile ${ctx.cityName}-wide`;
+    // "Nth percentile locally", not city- or country-wide: the rank is computed
+    // against the surrounding market (~1,770 km2), because a national rank made
+    // every village with two cafes outrank most of London. Also "percentile"
+    // rather than "more coffee-leaning than N%" — a large block ties at the
+    // maximum score, so a strict "more than" claim would overstate it.
+    verdict.textContent = `${v.label} — ${p.score > 0 ? '+' : ''}${p.score.toFixed(2)}, ${ordinal(p.pct)} percentile locally`;
     verdict.style.color = v.color;
     meterDot.parentElement.hidden = false;
     meterDot.style.left = `${((p.score + 1) / 2) * 100}%`;
