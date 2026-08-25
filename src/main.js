@@ -226,6 +226,50 @@ for (const { input, layers } of LAYER_TOGGLES) {
   map.on('load', apply);
 }
 
+// --- The Banana follows the viewport ---
+// It is on by default because the map opens on London, where it means
+// something. Once you pan or zoom away it is an annotation about a place that
+// is no longer on screen, so it switches itself off.
+{
+  const toggle = document.getElementById('toggle-banana');
+  const ring = bananaData.features[0].geometry.coordinates[0];
+  const bb = ring.reduce(
+    (a, [lng, lat]) => ({
+      w: Math.min(a.w, lng),
+      e: Math.max(a.e, lng),
+      s: Math.min(a.s, lat),
+      n: Math.max(a.n, lat),
+    }),
+    { w: 180, e: -180, s: 90, n: -90 },
+  );
+
+  const inView = () => {
+    const v = map.getBounds();
+    return !(
+      v.getEast() < bb.w ||
+      v.getWest() > bb.e ||
+      v.getNorth() < bb.s ||
+      v.getSouth() > bb.n
+    );
+  };
+
+  // A real click (or space on the focused checkbox) means the user has an
+  // opinion; from then on the viewport stops overriding it. Programmatic
+  // updates below dispatch 'change' only, so they never trip this.
+  let userDecided = false;
+  toggle.addEventListener('click', () => {
+    userDecided = true;
+  });
+
+  map.on('moveend', () => {
+    if (userDecided) return;
+    const want = inView();
+    if (toggle.checked === want) return;
+    toggle.checked = want;
+    toggle.dispatchEvent(new Event('change'));
+  });
+}
+
 // --- Hex colouring mode: index score vs district price growth ---
 const legendTitle = document.getElementById('legend-title');
 const legendLabels = document.getElementById('legend-labels');
