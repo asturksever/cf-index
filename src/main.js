@@ -1,5 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { cellToBoundary } from 'h3-js';
 import { buildStyle, INDEX_FILL, APPREC_FILL, VALUE_FILL } from './basemap-style.js';
 import { initSearch } from './search.js';
 import { initFindings } from './findings.js';
@@ -31,29 +32,79 @@ function dataBounds(fc) {
   ];
 }
 
-const CITIES = ['london', 'manchester', 'liverpool'];
+// One national dataset now, so these are camera presets rather than separate
+// builds. 'uk' means "fit the whole thing"; the rest are jump-to shortcuts.
+const VIEWS = {
+  all: { label: 'All' },
+  london: { label: 'London', center: [-0.118, 51.507], zoom: 9.6 },
+  birmingham: { label: 'Birmingham', center: [-1.9, 52.48], zoom: 10.2 },
+  manchester: { label: 'Manchester', center: [-2.24, 53.48], zoom: 10.2 },
+  leeds: { label: 'Leeds', center: [-1.55, 53.8], zoom: 10.2 },
+  bristol: { label: 'Bristol', center: [-2.59, 51.45], zoom: 10.4 },
+};
 
-/** Slug from ?city=, falling back to London. */
-function requestedCity() {
-  const q = new URLSearchParams(location.search).get('city');
-  return CITIES.includes(q) ? q : 'london';
+const DATA_SLUG = 'engwales';
+
+/** View preset from ?view=, defaulting to the whole country. */
+function requestedView() {
+  const q = new URLSearchParams(location.search).get('view');
+  return q in VIEWS ? q : 'all';
 }
 
 const cityFiles = (slug) =>
   Promise.all(
-    ['hexes.geojson', 'summary.json', 'pois.geojson', 'districts.json'].map((f) =>
+    ['hexes.json', 'summary.json', 'districts.json', 'hexes_coarse.json'].map((f) =>
       fetch(`${DATA_BASE}${slug}/${f}`).then((r) => r.json()),
     ),
   );
 
-let city = requestedCity();
-const [hexData, summary, poiData, districts] = await cityFiles(city);
+// The national POI file is ~7.7 MB and both density layers are off by default,
+// so it is fetched the first time one is switched on rather than on every load.
+let poiLoad = null;
+const loadPois = () =>
+  (poiLoad ??= fetch(`${DATA_BASE}${DATA_SLUG}/pois.geojson`)
+    .then((r) => r.json())
+    .then((data) => {
+      map.getSource('pois')?.setData(data);
+      return data;
+    }));
+
+/**
+ * Rebuild hex polygons from their H3 ids.
+ *
+ * The pipeline ships ids plus properties and leaves the geometry to us: a
+ * ring is seven coordinate pairs derivable from the id, and at UK scale that
+ * boilerplate would be most of the download. ~40k cells rebuild in well under
+ * a frame, and it happens once per city load.
+ */
+function hexesToGeoJSON({ hexes }) {
+  return {
+    type: 'FeatureCollection',
+    features: hexes.map((props) => {
+      const ring = cellToBoundary(props.h3, true); // true = [lng, lat]
+      ring.push(ring[0]);
+      return {
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: props,
+      };
+    }),
+  };
+}
+
+let view = requestedView();
+const [hexRaw, summary, districts, coarseRaw] = await cityFiles(DATA_SLUG);
+const coarseData = hexesToGeoJSON(coarseRaw);
+// Empty until a density layer asks for it; the source must still exist at
+// style-build time so the heatmap layers have something to attach to.
+const poiData = { type: 'FeatureCollection', features: [] };
+const hexData = hexesToGeoJSON(hexRaw);
 // The Banana is a London artefact, so it lives outside the per-city folders.
 const bananaData = await fetch(`${DATA_BASE}banana.geojson`).then((r) => r.json());
 
 // h3 index -> feature properties, for the postcode lookup. Rebuilt on each
 // city switch, so it is a `let` the search closure reads through.
-let hexProps = new Map(hexData.features.map((f) => [f.properties.h3, f.properties]));
+let hexProps = new Map(hexRaw.hexes.map((h) => [h.h3, h]));
 
 // Must be read before the map exists: constructing it with hash:true starts
 // writing the view into the URL, after which this can never look empty.
@@ -61,7 +112,7 @@ const hadSharedView = Boolean(location.hash);
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: buildStyle(hexData, poiData, bananaData),
+  style: buildStyle(hexData, poiData, bananaData, coarseData),
   ...HOME,
   hash: true,
   attributionControl: false,
@@ -144,6 +195,7 @@ const LAYER_TOGGLES = [
 for (const { input, layers } of LAYER_TOGGLES) {
   const checkbox = document.getElementById(input);
   const apply = () => {
+    if (checkbox.checked && layers.some((l) => l.startsWith('heat-'))) loadPois();
     for (const layer of layers) {
       if (!map.getLayer(layer)) continue;
       map.setLayoutProperty(layer, 'visibility', checkbox.checked ? 'visible' : 'none');
@@ -163,7 +215,7 @@ const MODES = {
   value: { title: 'Value spots', labels: ['low', '', 'best value'], fill: VALUE_FILL },
 };
 
-const HEX_LAYERS = ['hex-fill', 'hex-outline'];
+const HEX_LAYERS = ['hex-fill', 'hex-outline', 'hex-coarse-fill'];
 
 function applyHexMode() {
   const mode = Object.keys(MODES).find((m) => document.getElementById(`mode-${m}`).checked);
@@ -177,8 +229,10 @@ function applyHexMode() {
   legendEl.hidden = !mode;
   if (!mode) return;
 
-  if (map.getLayer('hex-fill')) {
-    map.setPaintProperty('hex-fill', 'fill-color', MODES[mode].fill);
+  // Both tiers share the colouring; only the coarse one lacks price-derived
+  // props, so growth/value simply render as its no-data grey when zoomed out.
+  for (const layer of ['hex-fill', 'hex-coarse-fill']) {
+    if (map.getLayer(layer)) map.setPaintProperty(layer, 'fill-color', MODES[mode].fill);
   }
   for (const m of Object.keys(MODES)) legendEl.classList.toggle(m, m === mode);
   legendTitle.textContent = MODES[mode].title;
@@ -298,60 +352,47 @@ initSearch(map, searchCtx, () => {
 });
 initFindings(summary);
 
-// --- City switcher ---
+// --- View switcher ---
+// One national dataset, so switching is purely a camera move: no refetch, no
+// source swap, no per-view copy to keep in sync.
 const cityBar = document.getElementById('cities');
 
-/** Swap every per-city dataset in place, then re-frame the map. */
-async function switchCity(slug) {
-  if (slug === city || !CITIES.includes(slug)) return;
-  cityBar.setAttribute('aria-busy', 'true');
+function applyView(name) {
+  const preset = VIEWS[name];
+  if (!preset) return;
+  view = name;
 
-  const [hex, sum, poi, dist] = await cityFiles(slug);
-  city = slug;
-
-  map.getSource('hexes').setData(hex);
-  map.getSource('pois').setData(poi);
-  hexProps = new Map(hex.features.map((f) => [f.properties.h3, f.properties]));
-  searchCtx.hexProps = hexProps;
-  searchCtx.districts = dist;
-  searchCtx.cityName = sum.city;
-
-  // The Banana is a London claim; offering it over Manchester would be
-  // meaningless, so the control goes away with the city.
-  const bananaRow = document.getElementById('toggle-banana').closest('.toggle');
-  const bananaOn = document.getElementById('toggle-banana');
-  bananaRow.hidden = slug !== 'london';
-  if (slug !== 'london' && bananaOn.checked) {
-    bananaOn.checked = false;
-    bananaOn.dispatchEvent(new Event('change'));
-  }
-
-  initFindings(sum);
-  document.getElementById('result').hidden = true;
-
-  // A new city means the old view is meaningless, so re-frame regardless of
-  // whether the user had panned around the previous one.
-  HOME_BOUNDS = dataBounds(hex);
   hasUserMoved = false;
-  // Jump, don't animate. Animated moves are driven by the render loop, so a
-  // stalled basemap leaves the camera stranded mid-flight — and flying 200
-  // miles between cities is disorienting rather than informative anyway.
-  map.fitBounds(HOME_BOUNDS, FIT);
+  if (name === 'all') {
+    map.fitBounds(HOME_BOUNDS, FIT);
+  } else {
+    // Always jump, never ease. Animated camera moves are driven by the render
+    // loop, so a slow or stalled basemap strands the camera mid-flight — and
+    // these hops cross the country, where an animation is disorienting anyway.
+    map.jumpTo({ center: preset.center, zoom: preset.zoom });
+  }
 
   for (const b of cityBar.querySelectorAll('button')) {
-    b.setAttribute('aria-pressed', String(b.dataset.city === slug));
+    b.setAttribute('aria-pressed', String(b.dataset.view === name));
   }
   const url = new URL(location.href);
-  url.searchParams.set('city', slug);
+  if (name === 'all') url.searchParams.delete('view');
+  else url.searchParams.set('view', name);
   history.replaceState(null, '', url);
-  cityBar.removeAttribute('aria-busy');
 }
 
 for (const b of cityBar.querySelectorAll('button')) {
-  b.setAttribute('aria-pressed', String(b.dataset.city === city));
-  b.addEventListener('click', () => switchCity(b.dataset.city));
+  b.setAttribute('aria-pressed', String(b.dataset.view === view));
+  b.addEventListener('click', () => applyView(b.dataset.view));
 }
-document.getElementById('toggle-banana').closest('.toggle').hidden = city !== 'london';
+
+// Honour ?view= on load. A hash in the URL is a more specific instruction
+// (someone shared an exact camera), so it wins.
+if (view !== 'all' && !hadSharedView) {
+  applyView(view);
+  // Stop the resize-driven refit from yanking the camera back to the full extent.
+  hasUserMoved = true;
+}
 
 map.on('error', (e) => console.warn('map error:', e.error?.message ?? e));
 

@@ -77,7 +77,11 @@ export const VALUE_FILL = [
  * @param {object} poiData parsed GeoJSON FeatureCollection of raw POI points
  * @param {object} bananaData parsed GeoJSON of the London Banana polygon
  */
-export function buildStyle(hexData, poiData, bananaData) {
+// Where the coarse tier hands over to the detailed one. Below this a res-9 hex
+// is sub-pixel; above it, res-6 cells are bigger than the screen.
+export const COARSE_MAXZOOM = 8.5;
+
+export function buildStyle(hexData, poiData, bananaData, coarseData) {
   return {
     version: 8,
     name: 'CFC Index — latte & terracotta',
@@ -96,6 +100,10 @@ export function buildStyle(hexData, poiData, bananaData) {
       pois: {
         type: 'geojson',
         data: poiData,
+      },
+      hexesCoarse: {
+        type: 'geojson',
+        data: coarseData,
       },
       banana: {
         type: 'geojson',
@@ -183,8 +191,21 @@ export function buildStyle(hexData, poiData, bananaData) {
         },
       },
       // --- the index (the data!) ---
+      // Two tiers of the same metric: res 6 while zoomed out, res 9 once close
+      // enough for it to be legible. Only one is ever visible.
+      {
+        id: 'hex-coarse-fill',
+        type: 'fill',
+        source: 'hexesCoarse',
+        maxzoom: COARSE_MAXZOOM,
+        paint: {
+          'fill-color': INDEX_FILL,
+          'fill-opacity': 0.75,
+        },
+      },
       {
         id: 'hex-fill',
+        minzoom: COARSE_MAXZOOM,
         type: 'fill',
         source: 'hexes',
         paint: {

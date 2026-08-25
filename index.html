@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The Coffee–Fried Chicken Index — London</title>
+    <title>The Coffee–Fried Chicken Index — England &amp; Wales</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,10 +23,13 @@
       <h1>☕ The Coffee–Fried Chicken Index 🐔</h1>
     </header>
 
-    <nav id="cities" aria-label="Choose a city">
-      <button type="button" data-city="london" aria-pressed="true">London</button>
-      <button type="button" data-city="manchester" aria-pressed="false">Manchester</button>
-      <button type="button" data-city="liverpool" aria-pressed="false">Liverpool</button>
+    <nav id="cities" aria-label="Jump to a place">
+      <button type="button" data-view="all" aria-pressed="true">All</button>
+      <button type="button" data-view="london" aria-pressed="false">London</button>
+      <button type="button" data-view="birmingham" aria-pressed="false">Birmingham</button>
+      <button type="button" data-view="manchester" aria-pressed="false">Manchester</button>
+      <button type="button" data-view="leeds" aria-pressed="false">Leeds</button>
+      <button type="button" data-view="bristol" aria-pressed="false">Bristol</button>
     </nav>
 
     <!-- Postcode search -->
@@ -127,8 +130,16 @@
           <li><strong>London Banana</strong> — a hand-drawn crescent, London only.</li>
         </ul>
         <p id="corr-layers-tail">
-          There's also a “Check my area” lookup for your own postcode, and a city switcher
-          for London, Manchester and Liverpool.
+          There's also a “Check my area” lookup for your own postcode, and shortcuts to
+          jump between the big cities.
+        </p>
+        <p id="corr-coverage">
+          <strong>Coverage: England &amp; Wales.</strong> Not a squeamishness about the
+          rest of the UK — HM Land Registry Price Paid simply stops at the border.
+          Northern Ireland came back with prices for 0% of its hexes and Scotland 7%,
+          which would have meant half the layers blank and every postcode search
+          reporting “too few sales”. Scotland's register is held by Registers of
+          Scotland on different terms.
         </p>
         <div id="corr-stats"></div>
         <p id="corr-sources">
