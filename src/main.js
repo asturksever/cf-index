@@ -232,7 +232,7 @@ const legendLabels = document.getElementById('legend-labels');
 const legendEl = document.getElementById('legend');
 const MODES = {
   index: { title: 'The index', labels: ['🐔 −1', '0', '+1 ☕'], fill: INDEX_FILL },
-  apprec: { title: 'Price growth', labels: ['1.35×', '1.9×', '2.4×+'], fill: APPREC_FILL },
+  apprec: { title: 'Price growth', labels: ['1.35×', '1.72×', '2.15×+'], fill: APPREC_FILL },
   value: { title: 'Value spots', labels: ['low', '', 'best value'], fill: VALUE_FILL },
 };
 

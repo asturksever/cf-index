@@ -41,13 +41,19 @@ export const APPREC_FILL = [
     'interpolate',
     ['linear'],
     ['get', 'apprec'],
-    // Stops track the observed district spread (5th–95th pct: 1.42×–2.26×),
-    // not a round-number guess, or almost every hex lands on one colour.
+    // Stops track the national district spread (5th-95th pct: 1.36x-2.13x,
+    // median 1.72x). The old stops were calibrated on London alone, where
+    // growth ran higher: nationally only 6% of districts reached 2.1x and 1%
+    // reached 2.4x, so the top of the ramp went unused and the whole layer
+    // read pale. Unlike the index and value spots this stays a *national*
+    // comparison — a price multiple does not depend on the local price level,
+    // and London out-grew the rest (1.86x vs 1.70x) rather than being
+    // penalised by it.
     1.35, '#F6F3FB',
-    1.6, '#CDBBE6',
-    1.9, '#A583D1',
-    2.1, '#7A4BBF',
-    2.4, '#46246E',
+    1.55, '#CDBBE6',
+    1.72, '#A583D1',
+    1.9, '#7A4BBF',
+    2.15, '#46246E',
   ],
 ];
 

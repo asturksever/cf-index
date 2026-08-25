@@ -18,7 +18,6 @@
     #23859c 92.5%,
     #084c61 100%
   );
-  /* Mirrors VALUE_FILL: coffee standing minus price standing, -0.5 to +0.85 */
   /* Mirrors VALUE_FILL: local rank of coffee minus local rank of price,
      -0.5 to +0.7 mapped onto 0-100%. */
   --value-grad: linear-gradient(
@@ -30,13 +29,13 @@
     #7038b0 83.3%,
     #3f1d6b 100%
   );
-  /* Mirrors APPREC_FILL: price-growth multiples 1.2x - 3.2x */
+  /* Mirrors APPREC_FILL: price-growth multiples 1.35x - 2.15x mapped onto 0-100% */
   --apprec-grad: linear-gradient(
     90deg,
     #f6f3fb 0%,
     #cdbbe6 25%,
-    #a583d1 45%,
-    #7a4bbf 70%,
+    #a583d1 46.3%,
+    #7a4bbf 68.8%,
     #46246e 100%
   );
 }
